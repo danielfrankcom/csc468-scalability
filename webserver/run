@@ -1,0 +1,13 @@
+#! /bin/bash
+
+PORT=5000
+
+RELATIVE_DIR=$(dirname "$0")
+ABSOLUTE_DIR=$(realpath "$RELATIVE_DIR")
+
+sudo docker run \
+    -it \
+    --rm \
+    -v "$ABSOLUTE_DIR/src":/src \
+    -p $PORT:$PORT \
+    webserver
