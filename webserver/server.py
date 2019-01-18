@@ -55,7 +55,11 @@ def sell(userid,stockSymbol,amount):
 
 @app.route("/commit_sell/<userid>")
 def commit_sell(userid):
-    pass
+    args = locals()
+    arg_string = ""
+    for _,v in args.items():
+        arg_string+='{0} '.format(v)
+    return arg_string
 
 @app.route("/cancel_sell/<userid>")
 def cancel_sell(userid):
@@ -113,7 +117,7 @@ def cancel_set_sell(userid,stockSymbol):
         arg_string+='{0} '.format(v)
     return arg_string
 
-@app.route("/dumplog/<userid>/<filename>")
+@app.route("/dumplog/<userid>/<path:filename>")
 def dumplog(userid,filename):
     args = locals()
     arg_string = ""
@@ -121,7 +125,7 @@ def dumplog(userid,filename):
         arg_string+='{0} '.format(v)
     return arg_string
 
-@app.route("/dumplog/<filename>")
+@app.route("/dumplog/<path:filename>")
 def dumplog_all(filename):
     args = locals()
     arg_string = ""
