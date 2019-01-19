@@ -13,6 +13,7 @@ Docker Compose must be installed on the host machine in order for the below comm
 
 ## Notes
 
+- If you want to run the workload-generator `docker-compose.yml`, you *cannot* also run the webserver `docker-compose.yml`.
 - If you want to run the containers from another directory, use the `-f` flag to specify the `docker-compose.yml` file.
 - If you change either `Dockerfile` you will need to use the `--build` flag.
 
