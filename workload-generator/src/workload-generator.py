@@ -3,14 +3,14 @@ import requests
 import threading
 import logging
 
-logging.basicConfig(level=logging.DEBUG, filename="log", filemode="a+", format='%(asctime)s: %(threadName)s  %(message)s')
+logging.basicConfig(level=logging.DEBUG, filename="/src/log", filemode="a+", format='%(asctime)s: %(threadName)s  %(message)s')
 
 def log(info):
     #print(info)
     logging.info(info)
 
 # NOTE You must have http:// at the start of the URL
-URL = "http://127.0.0.1:5000"
+URL = "http://webserver:5000"
 PRINT_WORK = True
 PRINT_STATUS_CODE = True
 PRINT_TEXT = True
