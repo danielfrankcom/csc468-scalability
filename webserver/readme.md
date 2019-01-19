@@ -8,6 +8,7 @@ Docker must be installed on the host machine in order for the below commands to 
 
 #### Linux / macOS
 
-1. Make sure you are in the `webserver` directory.
-2. Build the Docker container using `./build`.
-3. Run the container using `./run`.
+Both scripts should be executable from any directory.
+
+1. Build the Docker container by executing the `build` script.
+2. Run the container by executing the `run` script.
