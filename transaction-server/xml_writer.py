@@ -27,8 +27,8 @@ def _isNumeric(candidate):
 
 def _isStockSymbol(candidate):
     if (isinstance(candidate, str)
-            and len(str) > 0
-            and len(str) <= 3):
+            and len(candidate) > 0
+            and len(candidate) <= 3):
         return True
     return False
 
@@ -68,25 +68,22 @@ a prepended '_' symbol should be considered private.
 """
 class _LogEvent:
 
-    _attributes = dict()
-
-    """
-    The dictionary below has the following format:
-        "key": (verification_function, is_a_mandatory_field)
-    """
-    _attributeInfo = {
-            "timestamp": (lambda x: _isTimestamp(x), True), 
-            "server": (lambda x: isinstance(x, str), True),
-            "transactionNum": (lambda x: _isPositiveInt(x), True)
-    }
-
     """
     Initialize the event.
 
-    tag: a string representing the tag type used in the XML
+    tag:            a string representing the tag type used in the XML
+    supportedTypes: a dictionary of form - "key": (verification_function, is_a_mandatory_field)
     """
-    def __init__(self, tag):
+    def __init__(self, tag, supportedTypes):
         self._tag = tag
+
+        self._attributes = dict()
+        self._supportedTypes = {
+                "timestamp": (lambda x: _isTimestamp(x), True), 
+                "server": (lambda x: isinstance(x, str), True),
+                "transactionNum": (lambda x: _isPositiveInt(x), True)
+        }
+        self._supportedTypes.update(supportedTypes)
 
     """
     Update the current set of attributes with new values or new attributes.
@@ -97,13 +94,13 @@ class _LogEvent:
     throws: ValueError if one of the provided key/value pairs is invalid
     """
     def updateAll(self, **args):
-        validKeys = self._attributeInfo.keys()
+        validKeys = self._supportedTypes.keys()
         for key, value in args.items():
 
             if key not in validKeys:
                 raise ValueError("Key '{}' is not valid for this event type '{}'.".format(key, self._tag))
 
-            attributeTuple = self._attributeInfo[key]
+            attributeTuple = self._supportedTypes[key]
             validationFunction = attributeTuple[0]
             if not validationFunction(value):
                 raise ValueError("Value '{}' is not a valid '{}'.".format(value, key))
@@ -130,14 +127,15 @@ class _LogEvent:
         root = ET.Element(self._tag)
 
         # Look for all mandatory attributes and store them for processing.
-        remaining = [key for key, value in self._attributeInfo.items() if value[1]]
+        remaining = [key for key, value in self._supportedTypes.items() if value[1]]
         
         for key, value in self._attributes.items():
             elem = ET.SubElement(root, key)
             elem.text = str(value)
 
             # 'remaining' should be empty when all attributes accessed.
-            remaining.remove(key)
+            if key in remaining:
+                remaining.remove(key)
 
         if remaining:
             keyword = "element" if len(remaining) == 1 else "elements"
@@ -152,16 +150,35 @@ From requirements:
 """
 class UserCommand(_LogEvent):
 
-    _LogEvent._attributeInfo.update({
+    _supportedTypes = {
             "command": (lambda x: _isCommand(x), True), 
             "username": (lambda x: isinstance(x, str), False),
             "stockSymbol": (lambda x: _isStockSymbol(x), False),
             "filename": (lambda x: isinstance(x, str), False),
             "funds": (lambda x: _isNumeric(x), False)
-    })
+    }
 
     def __init__(self, **args):
-        _LogEvent.__init__(self, "userCommand")
+        _LogEvent.__init__(self, "userCommand", self._supportedTypes)
+        self.updateAll(**args)
+
+"""
+From requirements:
+    "Every hit to the quote server requires a log entry with the results. The price,
+    symbol, username, timestamp and cryptokey are as returned by the quote server"
+"""
+class QuoteServer(_LogEvent):
+
+    _supportedTypes = {
+            "price": (lambda x: _isNumeric(x), True), 
+            "username": (lambda x: isinstance(x, str), True),
+            "stockSymbol": (lambda x: _isStockSymbol(x), True),
+            "quoteServerTime": (lambda x: isinstance(x, int), True),
+            "cryptokey": (lambda x: isinstance(x, str), True)
+    }
+
+    def __init__(self, **args):
+        _LogEvent.__init__(self, "quoteServer", self._supportedTypes)
         self.updateAll(**args)
 
 """
@@ -216,10 +233,22 @@ def main():
     event.updateAll(timestamp=1514764800000, command="ADD")
     builder.append(event)
 
+    event = QuoteServer(timestamp=1514764800100, server="name of server")
+    attributes = {
+            "transactionNum": 2,
+            "price": 12.94,
+            "stockSymbol": "BER",
+            "username": "user",
+            "quoteServerTime": 30000012,
+            "cryptokey": "sthbaleochb234bsm"
+    }
+    event.updateAll(**attributes)
+    builder.append(event)
+
     event = UserCommand()
-    event.update("transactionNum", 2)
+    event.update("transactionNum", 3)
     event.update("server", "name of server")
-    event.updateAll(timestamp=1514764800200, command="BUY")
+    event.updateAll(timestamp=1514764800200, command="BUY", username="optional")
     builder.append(event)
 
     builder.write("./output-log.xml") # XML output.
