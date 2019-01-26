@@ -1,0 +1,51 @@
+version: '3'
+services:
+  ws1:
+      build: ./webserver
+      tty: true
+      volumes:
+        - ./webserver/src:/src
+      networks:
+          - nginx_network
+  ws2:
+      build: ./webserver
+      tty: true
+      volumes:
+        - ./webserver/src:/src
+      networks:
+          - nginx_network
+  ws3:
+      build: ./webserver
+      tty: true
+      volumes:
+        - ./webserver/src:/src
+      networks:
+          - nginx_network
+  nginx:
+      build: ./nginx
+      tty: true
+      depends_on:  # <-- wait for webservers to be "ready" before starting this service
+        - ws1
+        - ws2
+        - ws3
+      ports:
+          - '80:80'
+      networks:
+        - nginx_network
+
+  workload-generator:
+      build: ./workload-generator
+      stdin_open: true
+      tty: true
+      environment:
+          - STATS=1
+          - NUM_THREADS=10
+      volumes:
+          - ./workload-generator/src:/src
+          - ./workload-generator/workloads:/workloads
+      networks:
+          - nginx_network
+
+networks:
+  nginx_network:
+    driver: bridge
