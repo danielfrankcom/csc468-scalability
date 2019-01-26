@@ -10,6 +10,9 @@ services:
         build: .
         stdin_open: true
         tty: true
+        environment:
+            - NUM_THREADS=10
+            - STATS=1
         volumes:
             - ./src:/src
             - ./workloads:/workloads
