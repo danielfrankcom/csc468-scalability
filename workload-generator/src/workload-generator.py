@@ -14,22 +14,24 @@ def log(info):
     logging.info(info)
 
 # NOTE You must have http:// at the start of the URL
-URL = "http://webserver:5000"
+URL = "http://nginx"
 PRINT_WORK = True
 PRINT_STATUS_CODE = True
 PRINT_TEXT = True
 
-STATS = None
-NUM_THREADS = None
+STATS = 1
+NUM_THREADS = 10
 
 
 
-try:  
-   NUM_THREADS = int(os.environ["NUM_THREADS"])
-   STATS = int(os.environ["STATS"])
-except KeyError: 
-   print("Please set the environment variables.")
-   sys.exit(1)
+# try:  
+#    NUM_THREADS = int(os.environ["NUM_THREADS"])
+#    STATS = int(os.environ["STATS"])
+# except KeyError: 
+#    print("Please set the environment variables.")
+#    sys.exit(1)
+
+
 
 if len(sys.argv) != 2:
     print("Incorrect usage. Example: /{0} <workload file>".format(sys.argv[0]))
@@ -78,7 +80,9 @@ def worker_thread():
         # Do the work
         for url in work:
             if PRINT_WORK: log("{0}".format(url))
-            r = requests.get(url)
+            session = requests.Session()
+            session.trust_env = False
+            r = session.get(url)
             if(str(r.status_code)[0] != "2"):
                 log("ATTENTION for URL: {0}".format(url))
             if PRINT_STATUS_CODE: log(r.status_code)
