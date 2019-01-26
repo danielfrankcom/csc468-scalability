@@ -22,7 +22,7 @@ PRINT_TEXT = True
 STATS = None
 NUM_THREADS = None
 
-work_left = 0
+
 
 try:  
    NUM_THREADS = int(os.environ["NUM_THREADS"])
@@ -44,6 +44,9 @@ except:
 
 workload = workload_file.readlines()
 
+total_work_count = 0
+work_done = {} # A list containing the amounts of work done by each worker
+
 user_work = {}
 q = queue.Queue()
 
@@ -60,17 +63,18 @@ for work in workload:
     if user not in user_work:
         user_work[user] = []
     user_work[user].append(url)
-    work_left+=1
+    total_work_count+=1
     continue
 
 def worker_thread():
     log("Starting worker thread: {0}".format(threading.current_thread().getName()))
-    global work_left
+    global work_done
+    identifier = threading.get_ident()
+    work_done[identifier] = 0
     while True:
         work = q.get()
         if work is None:
             break # Once all of the work has been finished
-        amount_of_work = len(work)
         # Do the work
         for url in work:
             if PRINT_WORK: log("{0}".format(url))
@@ -79,19 +83,19 @@ def worker_thread():
                 log("ATTENTION for URL: {0}".format(url))
             if PRINT_STATUS_CODE: log(r.status_code)
             if PRINT_TEXT: log(r.text+"\n")
-        work_left-=amount_of_work
+            work_done[identifier] = work_done[identifier] + 1
         q.task_done()
 
 def timing_thread(starting_count):
     start = timer()
-    global work_left
+    global work_done
     while True:
         elapsed = timer() - start
-        work_done = starting_count-work_left
-        tps = work_done/elapsed
-        stats = "[STATS]: {0}/{1} @ {2} transactions per second".format(work_done,starting_count,tps)
+        work_done_total = sum(work_done.values())
+        tps = work_done_total/elapsed
+        stats = "[STATS]: {0}/{1} @ {2} transactions per second".format(work_done_total,starting_count,tps)
         print(stats)
-        if work_left <= 0:
+        if work_done_total >= starting_count:
             end = timer()
             finishing_debug = "[STATS]: Completed {0} using {1} threads in {2} seconds.".format(path,NUM_THREADS,(end - start))
             log(finishing_debug)
@@ -105,7 +109,7 @@ q = queue.Queue()
 for _,work in user_work.items():
     q.put(work)
 if STATS:
-    t = threading.Thread(target=timing_thread, args=(work_left,))
+    t = threading.Thread(target=timing_thread, args=(total_work_count,))
     t.start()
     threads.append(t)
 
