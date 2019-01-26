@@ -19,12 +19,6 @@ def _isPositiveInt(candidate):
         return True
     return False
 
-def _isNumeric(candidate):
-    if (isinstance(candidate, int)
-            or isinstance(candidate, float)):
-        return True
-    return False
-
 def _isStockSymbol(candidate):
     if (isinstance(candidate, str)
             and len(candidate) > 0
@@ -74,7 +68,7 @@ class _LogEvent:
     tag:            a string representing the tag type used in the XML
     supportedTypes: a dictionary of form - "key": (verification_function, is_a_mandatory_field)
     """
-    def __init__(self, tag, supportedTypes):
+    def __init__(self, tag, **supportedTypes):
         self._tag = tag
 
         self._attributes = dict()
@@ -131,7 +125,12 @@ class _LogEvent:
         
         for key, value in self._attributes.items():
             elem = ET.SubElement(root, key)
-            elem.text = str(value)
+
+            if isinstance(value, float):
+                # Format to 2 decimal places.
+                elem.text = "{0:.2f}".format(value)
+            else:
+                elem.text = str(value)
 
             # 'remaining' should be empty when all attributes accessed.
             if key in remaining:
@@ -155,11 +154,11 @@ class UserCommand(_LogEvent):
             "username": (lambda x: isinstance(x, str), False),
             "stockSymbol": (lambda x: _isStockSymbol(x), False),
             "filename": (lambda x: isinstance(x, str), False),
-            "funds": (lambda x: _isNumeric(x), False)
+            "funds": (lambda x: isinstance(x, float), False)
     }
 
     def __init__(self, **args):
-        _LogEvent.__init__(self, "userCommand", self._supportedTypes)
+        _LogEvent.__init__(self, "userCommand", **self._supportedTypes)
         self.updateAll(**args)
 
 """
@@ -170,7 +169,7 @@ From requirements:
 class QuoteServer(_LogEvent):
 
     _supportedTypes = {
-            "price": (lambda x: _isNumeric(x), True), 
+            "price": (lambda x: isinstance(x, float), True), 
             "username": (lambda x: isinstance(x, str), True),
             "stockSymbol": (lambda x: _isStockSymbol(x), True),
             "quoteServerTime": (lambda x: isinstance(x, int), True),
@@ -178,7 +177,67 @@ class QuoteServer(_LogEvent):
     }
 
     def __init__(self, **args):
-        _LogEvent.__init__(self, "quoteServer", self._supportedTypes)
+        _LogEvent.__init__(self, "quoteServer", **self._supportedTypes)
+        self.updateAll(**args)
+
+"""
+From requirements:
+    "Any time a user's account is touched, an account message is printed.  
+    Appropriate actions are 'add' or 'remove'"
+"""
+class AccountTransaction(_LogEvent):
+
+    _supportedTypes = {
+            "action": (lambda x: isinstance(x, str), True), 
+            "username": (lambda x: isinstance(x, str), True),
+            "funds": (lambda x: isinstance(x, float), True),
+    }
+
+    def __init__(self, **args):
+        _LogEvent.__init__(self, "accountTransaction", **self._supportedTypes)
+        self.updateAll(**args)
+
+"""
+From requirements:
+    "System events can be current user commands, interserver communications, 
+    or the execution of previously set triggers"
+"""
+class SystemEvent(_LogEvent):
+
+    _supportedTypes = {
+            "command": (lambda x: _isCommand(x), True), 
+            "username": (lambda x: isinstance(x, str), False),
+            "stockSymbol": (lambda x: _isStockSymbol(x), False),
+            "filename": (lambda x: isinstance(x, str), False),
+            "funds": (lambda x: isinstance(x, float), False),
+    }
+
+    def __init__(self, **args):
+        _LogEvent.__init__(self, "systemEvent", **self._supportedTypes)
+        self.updateAll(**args)
+
+"""
+From requirements:
+    "Error messages contain all the information of user commands, in 
+    addition to an optional error message"
+"""
+class ErrorEvent(SystemEvent):
+
+    def __init__(self, **args):
+        typeDef = (lambda x: isinstance(x, str), False)
+        _LogEvent.__init__(self, "errorEvent", **self._supportedTypes, errorMessage=typeDef)
+        self.updateAll(**args)
+
+"""
+From requirements:
+    "Debugging messages contain all the information of user commands, in 
+    addition to an optional debug message"
+"""
+class DebugEvent(SystemEvent):
+
+    def __init__(self, **args):
+        typeDef = (lambda x: isinstance(x, str), False)
+        _LogEvent.__init__(self, "debugEvent", **self._supportedTypes, debugMessage=typeDef)
         self.updateAll(**args)
 
 """
@@ -249,6 +308,26 @@ def main():
     event.update("transactionNum", 3)
     event.update("server", "name of server")
     event.updateAll(timestamp=1514764800200, command="BUY", username="optional")
+    builder.append(event)
+
+    event = ErrorEvent()
+    event.updateAll(transactionNum=4, server="name of server", timestamp = 1514764800300)
+    event.updateAll(command="BUY", stockSymbol="TED", errorMessage="error here")
+    builder.append(event)
+
+    event = SystemEvent()
+    event.updateAll(transactionNum=5, server="name of server", timestamp = 1514764800400)
+    event.updateAll(command="BUY", stockSymbol="TED")
+    builder.append(event)
+
+    event = AccountTransaction()
+    event.updateAll(transactionNum=6, server="name of server", timestamp = 1514764800500)
+    event.updateAll(action="did something", username="fake", funds=30.00)
+    builder.append(event)
+
+    event = DebugEvent()
+    event.updateAll(transactionNum=7, funds=40.0, server="name of server", timestamp = 1514764800600)
+    event.updateAll(command="BUY", stockSymbol="TED", debugMessage="not required")
     builder.append(event)
 
     builder.write("./output-log.xml") # XML output.
