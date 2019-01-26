@@ -11,4 +11,4 @@ ENV FLASK_ENV=development
 ENV FLASK_DEBUG=1
 
 # Configure command to run on startup.
-CMD ["flask", "run", "-h", "0.0.0.0"]
+CMD ["flask", "run", "-h", "0.0.0.0", "--with-threads"]
