@@ -7,3 +7,4 @@ RUN apk add nmap
 RUN pip3 install --upgrade pip
 RUN pip3 install requests
 RUN pip3 install tornado 
+RUN pip3 install aiohttp
