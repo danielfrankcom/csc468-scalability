@@ -10,9 +10,9 @@ def initdb():
     conn = None
     try:
         # Setting connection params:
-        psql_user = 'databaseuser'
+        psql_user = 'postgres'
         psql_db = 'postgres'
-        psql_password = ''
+        psql_password = 'gg'
         psql_server = 'localhost'
         psql_port = 5432
         
