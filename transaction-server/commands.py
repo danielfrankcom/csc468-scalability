@@ -68,9 +68,6 @@ def add(user_id, amount, cursor, conn):
             if i[0] == user_id:
                 cursor.execute('UPDATE users SET balance = balance + %s where username = %s;', (amount, user_id))
                 conn.commit()
-                cursor.execute('select * from users')
-                conn.commit()
-                print(cursor.fetchall())
                 return
         
         cursor.execute('INSERT INTO users VALUES (%s, %s)', (user_id, amount))
