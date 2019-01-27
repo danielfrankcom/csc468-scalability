@@ -91,11 +91,17 @@ def get_quote(user_id, stock_symbol):
 # to the quote server directly.  In the case of the latter, the new quote will be put
 # in the cached_quotes dictionary
 def quote(user_id, stock_symbol):
+    cryptokey = '123450ABCDE' # placeholder, to be used until legacy quote servers are working
     if not stock_symbol in cached_quotes.keys() or ((time.time() - cached_quotes[stock_symbol][1]) > QUOTE_LIFESPAN):
         # get quote from server
         new_price, time_of_quote = get_quote(user_id, stock_symbol)
         cached_quotes[stock_symbol] = (new_price, time_of_quote)
-        return "1,ABC,Jaime,1234567,1234567890"
+        return new_price, stock_symbol, user_id, time_of_quote, cryptokey
+#        return "1,ABC,Jaime,1234567,1234567890"
+    else: #the cached price is valid, return that
+        price = cached_quotes[stock_symbol][0] 
+        time_of_quote = cached_quotes[stock_symbol][1] 
+        return price, stock_symbol, user_id, time_of_quote, cryptokey 
 """ 
         need to send data to log file including:
         - "quoteServer" of type "QuoteServerType"
