@@ -12,15 +12,15 @@ realpath() {
     [[ $1 = /* ]] && echo "$1" || echo "$PWD/${1#./}"
 }
 
+SCRIPT_PATH="/src/workload-generator.py"
 RELATIVE_DIR=$(dirname "$0")
 ABSOLUTE_DIR=$(realpath "$RELATIVE_DIR")
-WORKLOADS_DIR="$ABSOLUTE_DIR/workload-generator/workloads"
-SCRIPT_PATH="$ABSOLUTE_DIR/workload-generator/src/workload-generator.py"
+WORKLOADS_DIR="$ABSOLUTE_DIR/workloads"
 YML_PATH="$ABSOLUTE_DIR/docker-compose.yml"
 
 # This assumes there is no file extension on the workload file.
 WORKLOAD_NAME=$(basename -- "$1")
-WORKLOAD_PATH="workload-generator/workloads/$WORKLOAD_NAME"
+WORKLOAD_PATH="/workloads/$WORKLOAD_NAME"
 
 # Find the container to attach to.
 CONTAINER_REGEX="^.*workload-generator.*"
