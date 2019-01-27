@@ -40,8 +40,7 @@ def initdb():
         cursor.execute( 'CREATE TABLE reserved                                 '
                         '(username VARCHAR(20) references users(username),     '
                         'stock_symbol VARCHAR(3) NOT NULL,                     '
-                        'stock_quantity INT NOT NULL,                          '
-                        'total_dollars FLOAT NOT NULL,                         '
+                        'amount FLOAT NOT NULL,                         '
                         'timestamp TIMESTAMP NOT NULL,                         '
                         'PRIMARY KEY (username, stock_symbol));                ')                        
         conn.commit()
@@ -78,23 +77,44 @@ def add(user_id, amount, cursor, conn):
 def quote(user_id, stock_symbol):
     return "1,ABC,Jaime,1234567,1234567890"
 
-def buy(user_id, stock_symbol, amount, cursor):
-    current_users = [i[0] for i in accounts]
-    if user_id in current_users:
-        index = current_users.index(user_id)
-        if float(accounts[index][1]) >= float(amount):
-            while True:
-                var = input("Please confirm or cancel the transaction (confirm/cancel): ")
-                if(var == "confirm"):
-                    #Need to implement keeping track of what stocks have been purchased
-                    accounts[index] = (user_id, float(accounts[index][1]) - float(amount))
-                elif(var == "cancel"):
-                    break
-            print(accounts)
-        else:
-            print("Insufficient Funds")
-    else:
-        print("User does not exist")
+def buy(user_id, stock_symbol, amount, cursor, conn):
+    cursor.execute('SELECT username FROM users;')
+    conn.commit()
+
+    for i in cursor.fetchall():
+        if i[0] == user_id:
+            # USER EXISTS
+            cursor.execute("SELECT balance FROM users WHERE username = %s", (user_id,))
+            conn.commit()
+            balance = cursor.fetchone()
+            if balance[0] >= float(amount):
+                # CAN AFFORD THE STOCK
+                cursor.execute("SELECT username FROM reserved WHERE username = %s and stock_symbol = %s", (user_id, stock_symbol))
+                conn.commit()
+
+                if cursor.fetchall() == []:
+                    cursor.execute("UPDATE users SET balance = balance - %s WHERE username = %s;", (int(amount), user_id))
+                    conn.commit()
+                    cursor.execute("INSERT INTO reserved VALUES (%s, %s, %s, %s);", (user_id, stock_symbol, amount, '2011-05-16 15:36:38',))
+                    conn.commit() 
+                else:
+                    cursor.execute("UPDATE users SET balance = balance - %s WHERE username = %s;", (int(amount), user_id))
+                    conn.commit()
+                    cursor.execute("UPDATE reserved SET amount = amount + %s where username = %s;", (int(amount), user_id,))
+                    conn.commit() 
+                    cursor.execute("select * from users")
+                    conn.commit()
+                    print(cursor.fetchall())
+                    cursor.execute("select * from reserved")
+                    conn.commit()
+                    print(cursor.fetchall())
+
+            else:
+                print("Insufficient Funds")
+            return
+
+    # USER DOESN"T EXIST
+    print("User does not exist")
     return 0
 
 def commit_buy(user_id):
