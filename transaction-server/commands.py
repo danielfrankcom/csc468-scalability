@@ -42,12 +42,11 @@ def initdb():
         conn.commit()
 
         cursor.execute( 'CREATE TABLE reserved                                      '
-                        '(reservationid SERIAL PRIMARY KEY,    '
+                        '(reservationid SERIAL PRIMARY KEY,                         '
                         'username VARCHAR(20) references users(username),           '
                         'stock_symbol VARCHAR(3) NOT NULL,                          '
-                        'stock_quantity INT NOT NULL,                               '
                         'amount FLOAT NOT NULL,                                     '
-                        'timestamp TIMESTAMP NOT NULL);                              ')                        
+                        'timestamp FLOAT NOT NULL);                                 ')                        
         conn.commit()
         return cursor, conn
     except (Exception, psycopg2.DatabaseError) as error:
@@ -74,7 +73,6 @@ def add(user_id, amount, cursor, conn):
                 conn.commit()
                 return
          
-
         cursor.execute('INSERT INTO users VALUES (%s, %s)', (user_id, amount))
         conn.commit()
         return
@@ -134,7 +132,7 @@ def buy(user_id, stock_symbol, amount, cursor, conn):
                 # CAN AFFORD THE STOCK
                 cursor.execute("UPDATE users SET balance = balance - %s WHERE username = %s;", (int(amount), user_id))
                 conn.commit()
-                cursor.execute("INSERT INTO reserved (username, stock_symbol, stock_quantity, amount, timestamp) VALUES (%s, %s, %s, %s, now());", (user_id, stock_symbol, int(float(amount)/price), amount,))
+                cursor.execute("INSERT INTO reserved (username, stock_symbol, amount, timestamp) VALUES (%s, %s, %s, %s);", (user_id, stock_symbol, amount, round(time.time(), 5),))
                 conn.commit() 
             else:
                 print("Insufficient Funds")
