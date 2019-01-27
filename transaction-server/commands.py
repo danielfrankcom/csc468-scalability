@@ -50,22 +50,33 @@ def initdb():
         print(error)
 
 
-def closedb():
+def closedb(cursor):
     cursor.close()
 
 def add(user_id, amount, cursor, conn):
     cursor.execute('SELECT username FROM users;')
     conn.commit()
-    print(cursor.fetchone())
 
-    # current_users = [i[0] for i in accounts]
-    # if user_id in current_users:
-    #     index = current_users.index(user_id)
-    #     accounts[index] = (user_id, float(accounts[index][1]) + float(amount))
-    #     print(accounts)
-    # else:
-    #     accounts.append((user_id, amount))
-    #     print(accounts)
+    if cursor.fetchall() == []:
+        cursor.execute('INSERT INTO users VALUES (%s, %s)', (user_id, amount))
+        conn.commit()
+        return
+    else:
+        cursor.execute('SELECT username FROM users;')
+        conn.commit()
+        for i in cursor.fetchall():
+            if i[0] == user_id:
+                cursor.execute('UPDATE users SET balance = balance + %s where username = %s;', (amount, user_id))
+                conn.commit()
+                cursor.execute('select * from users')
+                conn.commit()
+                print(cursor.fetchall())
+                return
+        
+        cursor.execute('INSERT INTO users VALUES (%s, %s)', (user_id, amount))
+        conn.commit()
+        return
+        
 
 def quote(user_id, stock_symbol):
     return "1,ABC,Jaime,1234567,1234567890"
@@ -151,7 +162,7 @@ def main():
                 buy(user_id, stock_symbol, amount, cursor, conn)
         elif command == "quit":
             break
-    closedb()
+    closedb(cursor)
 
 if __name__ == '__main__':
     main()
