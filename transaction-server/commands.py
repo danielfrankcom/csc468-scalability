@@ -46,7 +46,6 @@ def initdb():
                         'type VARCHAR(5) NOT NULL,                                  '
                         'username VARCHAR(20) references users(username),           '
                         'stock_symbol VARCHAR(3) NOT NULL,                          '
-                        'stock_quantity INT NOT NULL,                               '
                         'amount FLOAT NOT NULL,                                     '
                         'timestamp FLOAT NOT NULL);                                 ')      
 
