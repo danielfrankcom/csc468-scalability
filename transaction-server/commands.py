@@ -1,14 +1,18 @@
 import psycopg2
+import time   
+import random # used to gen random numbers in get_quote()
 
+QUOTE_LIFESPAN = 10.0 # period of time a quote is valid for (will be 60.0 for deployed software)
 accounts = []
+cached_quotes = {}
 
 def initdb():
     conn = None
     try:
         # Setting connection params:
-        psql_user = 'databaseuser'
+        psql_user = 'postgres'
         psql_db = 'postgres'
-        psql_password = ''
+        psql_password = 'gg'
         psql_server = 'localhost'
         psql_port = 5432
         
@@ -72,10 +76,39 @@ def add(user_id, amount, cursor, conn):
         cursor.execute('INSERT INTO users VALUES (%s, %s)', (user_id, amount))
         conn.commit()
         return
-        
 
+# get_quote() is used to directly acquire a quote from the quote server (eventually)
+# for now, this is a placeholder function, and returns a random value between
+# 1.0 and 10.0. 
+def get_quote(user_id, stock_symbol):
+        time_of_quote = round(time.time(), 5)
+        print("Getting quote from quote server for", stock_symbol, "at time: ", time_of_quote)
+        new_price = round(random.uniform(1.0, 10.0), 2)
+        return new_price, time_of_quote        
+
+# quote() is called when a client requests a quote.  It will return a valid price for the
+# stock as requested, but this value will either come from cached_quotes or from q hit
+# to the quote server directly.  In the case of the latter, the new quote will be put
+# in the cached_quotes dictionary
 def quote(user_id, stock_symbol):
-    return "1,ABC,Jaime,1234567,1234567890"
+    if not stock_symbol in cached_quotes.keys() or ((time.time() - cached_quotes[stock_symbol][1]) > QUOTE_LIFESPAN):
+        # get quote from server
+        new_price, time_of_quote = get_quote(user_id, stock_symbol)
+        cached_quotes[stock_symbol] = (new_price, time_of_quote)
+        return "1,ABC,Jaime,1234567,1234567890"
+""" 
+        need to send data to log file including:
+        - "quoteServer" of type "QuoteServerType"
+        - "timestampe" of type "unixTimeLimits"
+        - "server" of type "xsd:string"
+        - "transactionNum" of type "xsd:positiveInteger"
+        - "price" of type "xsd:decimal"
+        - "stockSymbol" of type "stockSymbolType"
+        - "username" of type "xsd:string"
+        - "quoteServerTime" of type "xsd:integer"
+        - "cryptokey" of type "xsd:string"
+        
+"""
 
 def buy(user_id, stock_symbol, amount, cursor, conn):
     cursor.execute('SELECT username FROM users;')
