@@ -139,13 +139,54 @@ def buy(user_id, stock_symbol, amount, cursor, conn):
             return
     # USER DOESN"T EXIST
     print("User does not exist")
-    return 0
+    return
 
-def commit_buy(user_id):
-    return 0
+def commit_buy(user_id, cursor, conn):
+    cursor.execute('SELECT * FROM reserved WHERE username = %s and timestamp > %s;', (user_id, round(time.time(), 5)-60))
+    conn.commit()
 
-def cancel_buy(user_id):
-    return 0
+    # NO BUY TO COMMIT
+    if cursor.fetchall() == []:
+        print("No buy to commit")
+    else:
+        cursor.execute('SELECT reservationid, stock_symbol, amount FROM reserved WHERE username = %s AND timestamp = (SELECT MAX(timestamp) FROM reserved WHERE username = %s);', (user_id, user_id))
+        conn.commit()
+
+        elements = cursor.fetchone()
+        reservationid = elements[0]
+        stock_symbol = elements[1]
+        amount = elements[2]
+
+        price, stock_symbol, user_id, time_of_quote, cryptokey = quote(user_id, stock_symbol)
+        
+        print("PRICE IS: ", price)
+        # See if the user already owns any of this stock
+        cursor.execute('SELECT * FROM stocks WHERE username = %s and stock_symbol = %s', (user_id, stock_symbol,))
+        conn.commit()
+        
+        if cursor.fetchall() == []:
+            cursor.execute('INSERT INTO stocks (username, stock_symbol, stock_quantity) VALUES (%s, %s, %s);', (user_id, stock_symbol, int(float(amount)/price)))
+            conn.commit()
+        else:
+            cursor.execute('UPDATE stocks SET stock_quantity = stock_quantity + %s WHERE username = %s and stock_symbol = %s;', (int(float(amount)/price), user_id, stock_symbol))
+            conn.commit()
+
+        cursor.execute('DELETE FROM reserved WHERE reservationid = %s', (reservationid,))    
+        conn.commit()        
+
+    return
+
+def cancel_buy(user_id, cursor, conn):
+    cursor.execute('SELECT reservationid, amount FROM reserved WHERE username = %s AND timestamp = (SELECT MAX(timestamp) FROM reserved WHERE username = %s);', (user_id, user_id))
+    conn.commit()
+    elements = cursor.fetchone()
+    reservationid = elements[0]
+    amount = elements[1]
+    cursor.execute('UPDATE users SET balance = balance + %s where username = %s', (amount, user_id))
+    conn.commit()
+    cursor.execute('DELETE FROM reserved WHERE reservationid = %s', (reservationid,))    
+    conn.commit()
+    return 
 
 def sell(user_id, stock_symbol, amount):
     return 0
@@ -186,7 +227,7 @@ def main():
         var = input("Enter a command: ")
         command = var.split(' ', 1)[0]
         #ADD Command
-        if command == "add":
+        if command == "ADD":
             try:
                 command, user_id, amount = var.split()
             except ValueError:
@@ -194,13 +235,27 @@ def main():
             else:    
                 add(user_id, amount, cursor, conn)
         #BUY Command
-        elif command == "buy":
+        elif command == "BUY":
             try:
                 command, user_id, stock_symbol, amount = var.split()
             except ValueError:
-                print("Invalid Input. <ADD, USER_ID, STOCK_SYMBOL, AMOUNT>")
+                print("Invalid Input. <BUY USER_ID STOCK_SYMBOL AMOUNT>")
             else:    
                 buy(user_id, stock_symbol, amount, cursor, conn)
+        elif command == "COMMIT_BUY":
+            try:
+                command, user_id = var.split()
+            except ValueError:
+                print("Invalid Input. <COMMIT_BUY USER_ID>")
+            else:    
+                commit_buy(user_id, cursor, conn)
+        elif command == "CANCEL_BUY":
+            try:
+                command, user_id = var.split()
+            except ValueError:
+                print("Invalid Input. <CANCEL_BUY USER_ID>")
+            else:    
+                cancel_buy(user_id, cursor, conn)
         elif command == "quit":
             break
     closedb(cursor)
