@@ -2,7 +2,7 @@ import psycopg2
 import time, threading
 import random # used to gen random numbers in get_quote()
 
-QUOTE_LIFESPAN = 10.0 # period of time a quote is valid for (will be 60.0 for deployed software)
+QUOTE_LIFESPAN = 3.0 # period of time a quote is valid for (will be 60.0 for deployed software)
 accounts = []
 cached_quotes = {}
 
@@ -10,9 +10,9 @@ def initdb():
     conn = None
     try:
         # Setting connection params:
-        psql_user = 'databaseuser'
+        psql_user = 'postgres'
         psql_db = 'postgres'
-        psql_password = ''
+        psql_password = 'gg'
         psql_server = 'localhost'
         psql_port = 5432
         
