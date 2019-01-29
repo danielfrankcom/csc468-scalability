@@ -1,8 +1,8 @@
 import psycopg2
-import time   
+import time, threading
 import random # used to gen random numbers in get_quote()
 
-QUOTE_LIFESPAN = 10.0 # period of time a quote is valid for (will be 60.0 for deployed software)
+QUOTE_LIFESPAN = 3.0 # period of time a quote is valid for (will be 60.0 for deployed software)
 accounts = []
 cached_quotes = {}
 
@@ -10,9 +10,9 @@ def initdb():
     conn = None
     try:
         # Setting connection params:
-        psql_user = 'databaseuser'
+        psql_user = 'postgres'
         psql_db = 'postgres'
-        psql_password = ''
+        psql_password = 'gg'
         psql_server = 'localhost'
         psql_port = 5432
         
@@ -24,8 +24,8 @@ def initdb():
         # Empty out all tables in the database
         cursor.execute( 'DROP TABLE IF EXISTS stocks;   '
                         'DROP TABLE IF EXISTS reserved; '
-                        'DROP TABLE IF EXISTS users;    '
-                        'DROP TABLE IF EXISTS triggers; ')
+                        'DROP TABLE IF EXISTS triggers; '
+                        'DROP TABLE IF EXISTS users;    ')
         conn.commit()
 
         # Recreate all tables in the database
@@ -47,6 +47,13 @@ def initdb():
                         'stock_symbol VARCHAR(3) NOT NULL,                          '
                         'amount FLOAT NOT NULL,                                     '
                         'timestamp FLOAT NOT NULL);                                 ')                        
+        cursor.execute( 'CREATE TABLE triggers                                      '
+                        '(username VARCHAR(20) NOT NULL references users(username)  '
+                        'ON DELETE CASCADE ON UPDATE CASCADE,                       '
+                        'stock_symbol VARCHAR(3) NOT NULL,                          '
+                        'trigger_amount FLOAT NOT NULL,                             '
+                        'purchase_amount FLOAT,                                     '
+                        'PRIMARY KEY (username, stock_symbol));                     ')
         conn.commit()
         return cursor, conn
     except (Exception, psycopg2.DatabaseError) as error:
@@ -115,6 +122,32 @@ def quote(user_id, stock_symbol):
         - "cryptokey" of type "xsd:string"
         
 """
+# Helper function - used to cancel buy orders after they timeout
+def buy_timeout(user_id, stock_symbol, dollar_amount, cursor, conn):
+    cursor.execute('SELECT * FROM reserved WHERE    '
+        'username = %s AND                     '
+        'stock_symbol = %s AND            '
+        'amount = %s;                    ',
+        (user_id, stock_symbol, dollar_amount))
+    result = cursor.fetchone()
+    reservationid = result[0]
+    reserved_cash = result[3]
+    if result is None: #order has already been manually confirmed or cancelled
+        print("Timer for order is up, but the order is already gone")
+        return
+    else: # the reservation still exists, so delete it and refund the cash back to user's account
+        cursor.execute('DELETE FROM reserved WHERE reservationid = %s;', (str(reservationid,)))    
+        cursor.execute('SELECT balance FROM users where username = %s;', (user_id,))
+        result = cursor.fetchall()
+        if result is None:
+            print("Error - user does not exist!")
+            return
+        existing_balance = result[0][0]
+        new_balance = existing_balance + reserved_cash
+        cursor.execute('UPDATE users SET balance = %s WHERE username = %s;', (str(new_balance), (user_id)))
+        conn.commit()        
+        print('buy order timout - the following buy order is now cancelled: ', 
+            user_id, stock_symbol, dollar_amount)
 
 def buy(user_id, stock_symbol, amount, cursor, conn):
     cursor.execute('SELECT username FROM users;')
@@ -134,6 +167,9 @@ def buy(user_id, stock_symbol, amount, cursor, conn):
                 conn.commit()
                 cursor.execute("INSERT INTO reserved (username, stock_symbol, amount, timestamp) VALUES (%s, %s, %s, %s);", (user_id, stock_symbol, amount, round(time.time(), 5),))
                 conn.commit() 
+
+                # create timer, when timer finishes have it cancel the buy
+                threading.Timer(QUOTE_LIFESPAN, buy_timeout, args=(user_id, stock_symbol, amount, cursor, conn)).start()
             else:
                 print("Insufficient Funds")
             return
@@ -180,6 +216,8 @@ def cancel_buy(user_id, cursor, conn):
     cursor.execute('SELECT reservationid, amount FROM reserved WHERE username = %s AND timestamp = (SELECT MAX(timestamp) FROM reserved WHERE username = %s);', (user_id, user_id))
     conn.commit()
     elements = cursor.fetchone()
+    if elements is None:    # no orders exist for this user
+        return
     reservationid = elements[0]
     amount = elements[1]
     cursor.execute('UPDATE users SET balance = balance + %s where username = %s', (amount, user_id))
