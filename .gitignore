@@ -2,5 +2,11 @@
 __pycache__
 .vscode
 *.xml
-
+*.class
 workload-generator/src/log
+
+# intellij-idea / gradle stuff
+.gradle/
+.idea
+out/
+build/
