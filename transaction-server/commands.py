@@ -2,7 +2,7 @@ import psycopg2
 import time, threading
 import random # used to gen random numbers in get_quote()
 
-QUOTE_LIFESPAN = 3.0 # period of time a quote is valid for (will be 60.0 for deployed software)
+QUOTE_LIFESPAN = 10.0 # period of time a quote is valid for (will be 60.0 for deployed software)
 accounts = []
 cached_quotes = {}
 
@@ -10,9 +10,9 @@ def initdb():
     conn = None
     try:
         # Setting connection params:
-        psql_user = 'postgres'
+        psql_user = 'databaseuser'
         psql_db = 'postgres'
-        psql_password = 'gg'
+        psql_password = ''
         psql_server = 'localhost'
         psql_port = 5432
         
@@ -43,10 +43,13 @@ def initdb():
 
         cursor.execute( 'CREATE TABLE reserved                                      '
                         '(reservationid SERIAL PRIMARY KEY,                         '
+                        'type VARCHAR(5) NOT NULL,                                  '
                         'username VARCHAR(20) references users(username),           '
                         'stock_symbol VARCHAR(3) NOT NULL,                          '
+                        'stock_quantity INT NOT NULL,                               '
                         'amount FLOAT NOT NULL,                                     '
-                        'timestamp FLOAT NOT NULL);                                 ')                        
+                        'timestamp FLOAT NOT NULL);                                 ')      
+
         cursor.execute( 'CREATE TABLE triggers                                      '
                         '(username VARCHAR(20) NOT NULL references users(username)  '
                         'ON DELETE CASCADE ON UPDATE CASCADE,                       '
@@ -99,16 +102,16 @@ def get_quote(user_id, stock_symbol):
 # in the cached_quotes dictionary
 def quote(user_id, stock_symbol):
     cryptokey = '123450ABCDE' # placeholder, to be used until legacy quote servers are working
-    if not stock_symbol in cached_quotes.keys() or ((time.time() - cached_quotes[stock_symbol][1]) > QUOTE_LIFESPAN):
+    # if not stock_symbol in cached_quotes.keys() or ((time.time() - cached_quotes[stock_symbol][1]) > QUOTE_LIFESPAN):
         # get quote from server
-        new_price, time_of_quote = get_quote(user_id, stock_symbol)
-        cached_quotes[stock_symbol] = (new_price, time_of_quote)
-        return new_price, stock_symbol, user_id, time_of_quote, cryptokey
+    new_price, time_of_quote = get_quote(user_id, stock_symbol)
+    # cached_quotes[stock_symbol] = (new_price, time_of_quote)
+    return new_price, stock_symbol, user_id, time_of_quote, cryptokey
 #        return "1,ABC,Jaime,1234567,1234567890"
-    else: #the cached price is valid, return that
-        price = cached_quotes[stock_symbol][0] 
-        time_of_quote = cached_quotes[stock_symbol][1] 
-        return price, stock_symbol, user_id, time_of_quote, cryptokey 
+    # else: #the cached price is valid, return that
+        # price = cached_quotes[stock_symbol][0] 
+        # time_of_quote = cached_quotes[stock_symbol][1] 
+        # return price, stock_symbol, user_id, time_of_quote, cryptokey 
 """ 
         need to send data to log file including:
         - "quoteServer" of type "QuoteServerType"
@@ -125,17 +128,18 @@ def quote(user_id, stock_symbol):
 # Helper function - used to cancel buy orders after they timeout
 def buy_timeout(user_id, stock_symbol, dollar_amount, cursor, conn):
     cursor.execute('SELECT * FROM reserved WHERE    '
-        'username = %s AND                     '
-        'stock_symbol = %s AND            '
-        'amount = %s;                    ',
-        (user_id, stock_symbol, dollar_amount))
+        'type = %s AND                              '
+        'username = %s AND                          '
+        'stock_symbol = %s AND                      '
+        'amount = %s;                               ',
+        ('buy', user_id, stock_symbol, dollar_amount))
     result = cursor.fetchone()
-    reservationid = result[0]
-    reserved_cash = result[3]
     if result is None: #order has already been manually confirmed or cancelled
         print("Timer for order is up, but the order is already gone")
         return
     else: # the reservation still exists, so delete it and refund the cash back to user's account
+        reservationid = result[0]
+        reserved_cash = result[5]
         cursor.execute('DELETE FROM reserved WHERE reservationid = %s;', (str(reservationid,)))    
         cursor.execute('SELECT balance FROM users where username = %s;', (user_id,))
         result = cursor.fetchall()
@@ -163,9 +167,9 @@ def buy(user_id, stock_symbol, amount, cursor, conn):
             balance = cursor.fetchone()
             if balance[0] >= float(amount):
                 # CAN AFFORD THE STOCK
-                cursor.execute("UPDATE users SET balance = balance - %s WHERE username = %s;", (int(amount), user_id))
+                cursor.execute("UPDATE users SET balance = balance - %s WHERE username = %s;", (float(amount), user_id))
                 conn.commit()
-                cursor.execute("INSERT INTO reserved (username, stock_symbol, amount, timestamp) VALUES (%s, %s, %s, %s);", (user_id, stock_symbol, amount, round(time.time(), 5),))
+                cursor.execute("INSERT INTO reserved (type, username, stock_symbol, stock_quantity, amount, timestamp) VALUES (%s, %s, %s, %s, %s, %s);", ('buy', user_id, stock_symbol, int(float(amount)/price), amount, round(time.time(), 5),))
                 conn.commit() 
 
                 # create timer, when timer finishes have it cancel the buy
@@ -178,42 +182,42 @@ def buy(user_id, stock_symbol, amount, cursor, conn):
     return
 
 def commit_buy(user_id, cursor, conn):
-    cursor.execute('SELECT * FROM reserved WHERE username = %s and timestamp > %s;', (user_id, round(time.time(), 5)-60))
+    cursor.execute('SELECT * FROM reserved WHERE type = %s AND username = %s AND timestamp > %s;', ('buy', user_id, round(time.time(), 5)-60))
     conn.commit()
 
     # NO BUY TO COMMIT
     if cursor.fetchall() == []:
         print("No buy to commit")
+    # BUY TO COMMIT
     else:
-        cursor.execute('SELECT reservationid, stock_symbol, amount FROM reserved WHERE username = %s AND timestamp = (SELECT MAX(timestamp) FROM reserved WHERE username = %s);', (user_id, user_id))
+        cursor.execute('SELECT reservationid, stock_symbol, stock_quantity, amount FROM reserved WHERE type = %s AND username = %s AND timestamp = (SELECT MAX(timestamp) FROM reserved WHERE type = %s AND username = %s);', ('buy', user_id, 'buy', user_id))
         conn.commit()
 
         elements = cursor.fetchone()
         reservationid = elements[0]
         stock_symbol = elements[1]
-        amount = elements[2]
-
-        price, stock_symbol, user_id, time_of_quote, cryptokey = quote(user_id, stock_symbol)
+        stock_quantity = elements[2]
+        amount = elements[3]
         
-        print("PRICE IS: ", price)
         # See if the user already owns any of this stock
         cursor.execute('SELECT * FROM stocks WHERE username = %s and stock_symbol = %s', (user_id, stock_symbol,))
         conn.commit()
         
+        # The user doesn't own any of this stock yet
         if cursor.fetchall() == []:
-            cursor.execute('INSERT INTO stocks (username, stock_symbol, stock_quantity) VALUES (%s, %s, %s);', (user_id, stock_symbol, int(float(amount)/price)))
+            cursor.execute('INSERT INTO stocks (username, stock_symbol, stock_quantity) VALUES (%s, %s, %s);', (user_id, stock_symbol, stock_quantity))
             conn.commit()
+        # The user already owns some of this stock
         else:
-            cursor.execute('UPDATE stocks SET stock_quantity = stock_quantity + %s WHERE username = %s and stock_symbol = %s;', (int(float(amount)/price), user_id, stock_symbol))
+            cursor.execute('UPDATE stocks SET stock_quantity = stock_quantity + %s WHERE username = %s and stock_symbol = %s;', (stock_quantity, user_id, stock_symbol))
             conn.commit()
 
         cursor.execute('DELETE FROM reserved WHERE reservationid = %s', (reservationid,))    
         conn.commit()        
-
     return
 
 def cancel_buy(user_id, cursor, conn):
-    cursor.execute('SELECT reservationid, amount FROM reserved WHERE username = %s AND timestamp = (SELECT MAX(timestamp) FROM reserved WHERE username = %s);', (user_id, user_id))
+    cursor.execute('SELECT reservationid, amount FROM reserved WHERE type = %s AND username = %s AND timestamp = (SELECT MAX(timestamp) FROM reserved WHERE type = %s AND username = %s);', ('buy', user_id, 'buy', user_id))
     conn.commit()
     elements = cursor.fetchone()
     if elements is None:    # no orders exist for this user
@@ -226,14 +230,84 @@ def cancel_buy(user_id, cursor, conn):
     conn.commit()
     return 
 
-def sell(user_id, stock_symbol, amount):
-    return 0
+def sell(user_id, stock_symbol, amount, cursor, conn):
+    cursor.execute('SELECT username FROM users;')
+    conn.commit()
+    
+    price, stock_symbol, user_id, time_of_quote, cryptokey = quote(user_id, stock_symbol)
 
-def commit_sell(user_id):
-    return 0
+    for i in cursor.fetchall():
+        # USER EXISTS
+        if i[0] == user_id:
+            cursor.execute("SELECT stock_quantity FROM stocks WHERE username = %s AND stock_symbol = %s", (user_id, stock_symbol))
+            conn.commit()
+            stock_quantity = cursor.fetchall()
+            stocks_to_sell = int(float(amount)/price)
+            if stock_quantity != []:
+                # User owns enough of the stock to sell the specified amount
+                if stock_quantity[0][0] >= stocks_to_sell and stocks_to_sell != 0:
+                    cursor.execute("UPDATE stocks SET stock_quantity = stock_quantity - %s WHERE username = %s AND stock_symbol = %s", (stocks_to_sell, user_id, stock_symbol,))
+                    conn.commit()
+                    cursor.execute("INSERT INTO reserved (type, username, stock_symbol, stock_quantity, amount, timestamp) VALUES (%s, %s, %s, %s, %s, %s);", ('sell', user_id, stock_symbol, stocks_to_sell, amount, round(time.time(), 5),))
+                    conn.commit() 
+
+                    # create timer, when timer finishes have it cancel the buy
+                    threading.Timer(QUOTE_LIFESPAN, buy_timeout, args=(user_id, stock_symbol, amount, cursor, conn)).start()
+                else:
+                    print("User either does not own enough of the stock requested, or the stock is worth more than the price requested to sell")
+                return
+            else:
+                print("No stock of this type to sell")
+                return
+    # USER DOESN"T EXIST
+    print("User does not exist")
+    return
+
+def commit_sell(user_id, cursor, conn):
+    cursor.execute('SELECT * FROM reserved WHERE type = %s AND username = %s AND timestamp > %s;', ('sell', user_id, round(time.time(), 5)-60))
+    conn.commit()
+
+    # NO SELL TO COMMIT
+    if cursor.fetchall() == []:
+        print("No sell to commit")
+    # SELL TO COMMIT
+    else:
+        cursor.execute( 'SELECT reservationid, stock_symbol, stock_quantity, amount '
+                        'FROM reserved                                              '
+                        'WHERE type = %s                                            '
+                        'AND username = %s                                          '
+                        'AND timestamp = (SELECT MAX(timestamp)                     '
+                        '                 FROM reserved                             '
+                        '                 WHERE type = %s                           '
+                        '                 AND username = %s);                       '
+                        , ('sell', user_id, 'sell', user_id))
+        conn.commit()
+
+        elements = cursor.fetchone()
+        reservationid = elements[0]
+        stock_symbol = elements[1]
+        stock_quantity = elements[2]
+        amount = elements[3]
+
+        cursor.execute('UPDATE users SET balance = balance + %s where username = %s', (amount, user_id))
+        conn.commit()
+        cursor.execute('DELETE FROM reserved WHERE reservationid = %s', (reservationid,))    
+        conn.commit()        
+    return
 
 def cancel_sell(user_id):
-    return 0
+    cursor.execute('SELECT reservationid, stock_quantity FROM reserved WHERE type = %s AND username = %s AND timestamp = (SELECT MAX(timestamp) FROM reserved WHERE type = %s AND username = %s);', ('sell', user_id, 'sell', user_id))
+    conn.commit()
+    elements = cursor.fetchone()
+    if elements is None:    # no orders exist for this user
+        return
+    reservationid = elements[0]
+    stock_quantity = elements[1]
+    cursor.execute("UPDATE stocks SET stock_quantity = stock_quantity + %s WHERE username = %s AND stock_symbol = %s", (stock_quantity, user_id, stock_symbol))
+    conn.commit()
+    cursor.execute('DELETE FROM reserved WHERE reservationid = %s', (reservationid,))    
+    conn.commit()
+    return 
 
 def set_buy_amount(user_id, stock_symbol, amount):
     return 0
@@ -294,8 +368,42 @@ def main():
                 print("Invalid Input. <CANCEL_BUY USER_ID>")
             else:    
                 cancel_buy(user_id, cursor, conn)
+        elif command == "SELL":
+            try:
+                command, user_id, stock_symbol, amount = var.split()
+            except ValueError:
+                print("Invalid Input. <SELL USER_ID STOCK_SYMBOL AMOUNT>")
+            else:    
+                sell(user_id, stock_symbol, amount, cursor, conn)
+        elif command == "COMMIT_SELL":
+            try:
+                command, user_id = var.split()
+            except ValueError:
+                print("Invalid Input. <COMMIT_SELL USER_ID>")
+            else:    
+                commit_sell(user_id, cursor, conn)
         elif command == "quit":
             break
+        else:
+            print("Invalid Command")
+
+        print("USERS TABLE")
+        cursor.execute("SELECT * FROM USERS;")
+        conn.commit()
+        print(cursor.fetchall())
+
+        print("RESERVED TABLE")
+        cursor.execute("SELECT * FROM RESERVED;")
+        conn.commit()
+        print(cursor.fetchall())
+
+        print("STOCKS TABLE")
+        cursor.execute("SELECT * FROM STOCKS;")
+        conn.commit()
+        print(cursor.fetchall())
+
+
+    
     closedb(cursor)
 
 if __name__ == '__main__':
