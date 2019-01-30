@@ -21,7 +21,7 @@ jar {
     manifest {
         attributes (
                 'Class-Path': configurations.compile.files.collect {"$it.name"}.join(' '),
-                'Main-Class' : 'com.distributed.Entry'
+                'Main-Class' : 'org.ddjk.workload.Generator'
         )
     }
     from {

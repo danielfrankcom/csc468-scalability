@@ -8,7 +8,7 @@ import org.asynchttpclient.Response;
 import java.util.concurrent.Future;
 
 
-public class Attacker { 
+public class Generator {
 
     private static final int NS_IN_MS = 1_000_000;
     private static final int MS_IN_S = 1_000;
