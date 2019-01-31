@@ -251,7 +251,7 @@ class LogBuilder:
     Initialize the builder.
     """
     def __init__(self):
-        self._root = ET.Element("log")
+        self._elements = []
 
     """
     Initialize the builder.
@@ -261,20 +261,60 @@ class LogBuilder:
     """
     def append(self, event):
         element = event._getElement()
-        self._root.append(element)
+        self._elements.append(element)
 
     """
-    Write the constructed data to a file.
+    Write all of the constructed data to a file.
 
     filePath: the relative or absolute path that the logfile will be created as
     """
     def write(self, filePath):
-        rawOutput = ET.tostring(self._root)
+        self.writeFiltered(filePath, None)
+
+    """
+    Write a subset of the constructed data to a file, filtered by username.
+
+    filePath: the relative or absolute path that the logfile will be created as
+    username: the username to filter by, or None to allow all usernames
+    """
+    def writeFiltered(self, filePath, username):
+
+        root = ET.Element("log")
+        for element in self._elements:
+            
+            if self.shouldExclude(element, username):
+                continue
+                
+            root.append(element)
+
+        rawOutput = ET.tostring(root)
         parsed = minidom.parseString(rawOutput)
         pretty = parsed.toprettyxml(indent="   ")
 
         with open(filePath, "w") as f:
                 f.write(pretty)
+
+    """
+    Determine if a provided element should be excluded from the output based on
+    the username that is being filtered on.
+
+    element:  the Element that may be either included or excluded
+    username: the username to filter by, or None to allow all usernames
+    """
+    def shouldExclude(self, element, username):
+
+        # A username of None should include all elements.
+        if not username:
+            return False
+
+        children = list(element)
+
+        for child in children:
+            if child.tag == "username" and child.text == username:
+                return False
+
+        return True
+
 
 
 """
@@ -322,7 +362,7 @@ def main():
 
     event = AccountTransaction()
     event.updateAll(transactionNum=6, server="name of server", timestamp = 1514764800500)
-    event.updateAll(action="did something", username="fake", funds=30.00)
+    event.updateAll(action="did something", username="user", funds=30.00)
     builder.append(event)
 
     event = DebugEvent()
@@ -330,7 +370,9 @@ def main():
     event.updateAll(command="BUY", stockSymbol="TED", debugMessage="not required")
     builder.append(event)
 
-    builder.write("./output-log.xml") # XML output.
+    # XML output.
+    builder.write("./output-log1.xml")
+    builder.writeFiltered("./output-log2.xml", "user")
 
 
 if __name__ == "__main__":
