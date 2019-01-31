@@ -10,9 +10,9 @@ def initdb():
     conn = None
     try:
         # Setting connection params:
-        psql_user = 'databaseuser'
+        psql_user = 'postgres'
         psql_db = 'postgres'
-        psql_password = ''
+        psql_password = 'gg'
         psql_server = 'localhost'
         psql_port = 5432
         
@@ -55,8 +55,8 @@ def initdb():
                         '(username VARCHAR(20) NOT NULL references users(username)  '
                         'ON DELETE CASCADE ON UPDATE CASCADE,                       '
                         'stock_symbol VARCHAR(3) NOT NULL,                          '
-                        'trigger_amount FLOAT NOT NULL,                             '
-                        'purchase_amount FLOAT,                                     '
+                        'trigger_amount FLOAT,                                      '
+                        'purchase_amount FLOAT NOT NULL,                            '
                         'PRIMARY KEY (username, stock_symbol));                     ')
         conn.commit()
         return cursor, conn
@@ -317,8 +317,84 @@ def cancel_sell(user_id):
     conn.commit()
     return 
 
-def set_buy_amount(user_id, stock_symbol, amount):
+# set_buy_amount allows a user to set a dollar amount of stock to buy.  This must be followed
+# by set_buy_trigger() before the trigger goes 'live'. 
+def set_buy_amount(user_id, stock_symbol, amount, cursor, conn):
+    amount = float(amount)
+   
+    # Does SET_BUY order exist for this user/stock combo?
+    cursor.execute( 'SELECT purchase_amount     '
+                    'FROM triggers              '
+                    'WHERE username = %s        '
+                    'AND stock_symbol = %s;     '
+                    , (user_id, stock_symbol))
+    existing_setbuy_amount = cursor.fetchone() # this is a tuple containing 1 string or None
+    setbuy_exists = True
+    difference = 0
+    if existing_setbuy_amount is None:
+        setbuy_exists = False
+        difference = amount
+    else:
+        setbuy_exists = True
+        difference = amount - float(existing_setbuy_amount[0]) #convert tuple containing string into float
+    # confirm that the user has the appropriate funds in their account
+    cursor.execute('SELECT balance from users where username = %s', (user_id,))
+    balance = float(cursor.fetchone()[0])
+    print('balance of ', user_id, ': ', balance, "and type: ", type(balance))
+    if balance < difference:
+        print("insufficient funds, request denied")
+        return
+    else:   # balance > difference, so create the SET_BUY order
+        print("balance is sufficient")
+        # adjust member's account balance
+        cursor.execute(     'UPDATE users SET balance = balance - %s        '
+                            'WHERE username = %s                            '
+                            ,(difference, user_id))
+        
+        # if the order existed already, update it with the new BUY_AMOUNT, else create new record
+        if setbuy_exists:
+            cursor.execute( 'UPDATE triggers SET purchase_amount = %s   '
+                            'WHERE username = %s                        '
+                            'AND stock_symbol = %s;                     '
+                            ,(amount, user_id, stock_symbol))
+        else: # setbuy_exists = False
+            cursor.execute( 'INSERT INTO triggers (username, stock_symbol, purchase_amount) values (%s, %s, %s);', (user_id, stock_symbol, amount))
+        conn.commit()
+    return
+
+""" PREVIOUS VERSION - DOESN'T ACCOUNT FOR EXISTING ORDER WHEN COMPARING TO ACCOUNT BALANCE
+    # the logic of this next set of nested if statements is as follows:
+    # - ensure the user has enough money in their account to reserve the amount needed for the SET_BUY
+    # - if not enough money, cancel the request
+    # - If they have enough, remove the money from their account 
+    # - and determine whether there is already a SET_BUY order for this user and this stock
+    # - If there is, then modify the SET_BUY amount to the amount provided and refund/debit the user account as required
+    # - If not, create a new record in triggers
+    if balance > amount: # note: '>= is not appropriate with floats, since 'equal to' is meaningless due to rounding errors.
+        print("balance is sufficient")
+        print("amount:", amount, "balance:", balance)
+        # remove amount from user's account
+        
+        # check to see if this stock has a SET_BUY order for this user
+        cursor.execute('SELECT purchase_amount FROM triggers WHERE username = %s AND stock_symbol = %s;', (user_id, stock_symbol))
+        result = cursor.fetchone()
+        if result is None: # no duplicate SET_BUY order exists
+            cursor.execute('UPDATE users SET balance = balance - %s where username = %s', (amount, user_id))
+            cursor.execute('INSERT INTO triggers (username, stock_symbol, purchase_amount) values (%s, %s, %s);', (user_id, stock_symbol, amount))
+            conn.commit()
+        else: # duplicate record exists, so modify the SET_BUY amount and correct the user's account balance
+            prev_amount = float(result[0])
+            difference = prev_amount - amount
+            cursor.execute('UPDATE users SET balance = balance + %s where username = %s', (difference, user_id))
+            cursor.execute('UPDATE triggers SET purchase_amount = %s where username = %s and stock_symbol = %s;', (amount, user_id, stock_symbol))
+            conn.commit()
+    else: # balance < amount, so deny the request
+        print("funds not available")
+        print("amount:", amount, "balance:", balance)
+        return
+
     return 0
+"""
 
 def cancel_set_buy(user_id, stock_symbol):
     return 0
@@ -390,6 +466,13 @@ def main():
                 print("Invalid Input. <COMMIT_SELL USER_ID>")
             else:    
                 commit_sell(user_id, cursor, conn)
+        elif command == "SET_BUY_AMOUNT":
+            try:
+                command, user_id, stock_symbol, amount = var.split()
+            except ValueError:
+                print("Invalid Input.  <SET_BUY_AMOUNT USER_ID STOCK_SYMBOL AMOUNT>")
+            else:
+                set_buy_amount(user_id, stock_symbol, amount, cursor, conn)
         elif command == "quit":
             break
         else:
