@@ -425,8 +425,61 @@ def dumplog(user_id, filename):
 def display_summary(user_id):
     return 0
 
+# this method is called by an extra thread.  Every QUOTE_LIFESPAN period of time it goes
+# through the triggers table.  For any row that posesses a trigger_value, a quote is
+# obtained for that stock and if appropriate the buy/sell is triggered
+def trigger_maintainer(cursor, conn):
+    cursor.execute('SELECT * FROM triggers WHERE trigger_amount IS NOT NULL;')
+    results = cursor.fetchall() # NOTE: this will not scale - we may have HUGE numbers of rows later
+                                # I've done this now though to avoid having stuff on cursor's buffer
+    print("running trigger_maintainer")
+    for row in results:
+        print(row)
+        user_id = row[0]
+        stock_symbol = row[1]
+        buy_or_sell = row[2]
+        trigger_amount = row[3]
+        purchase_amount = row[4]
+        current_price = quote(user_id, stock_symbol)[0]
+        print("row details: user_id:", user_id, "stock_symbol:", stock_symbol, "buy_or_sell:", buy_or_sell, "trigger_amount:", trigger_amount, "purchase_amount:", purchase_amount, "current_price:", current_price)
+        if buy_or_sell == 'buy' and current_price <= trigger_amount:
+            num_stocks_to_buy = int(purchase_amount/current_price)
+            leftover_cash = purchase_amount - (current_price * num_stocks_to_buy)
+
+            # purchase the stocks
+            cursor.execute( 'UPDATE stocks                              '
+                            'SET stock_quantity = stock_quantity + %s   '
+                            'WHERE username = %s                        '
+                            'AND stock_symbol = %s;                     '
+                            ,(num_stocks_to_buy, user_id, stock_symbol))
+
+            # credit user account leftover cash
+            cursor.execute( 'UPDATE users SET balance = balance + %s        '
+                            'WHERE username = %s                            '
+                            ,(leftover_cash, user_id))
+
+            # remove the trigger
+            cursor.execute( 'DELETE FROM triggers   '
+                            'WHERE username = %s     '
+                            'AND stock_symbol = %s  '
+                            'AND type = %s;         '
+                            ,(user_id, stock_symbol, buy_or_sell))
+            conn.commit()
+
+        elif buy_or_sell == 'sell' and current_price >= trigger_amount:
+            sell(user_id, stock_symbol, purchase_amount, cursor, conn)
+            commit_sell(user_id, cursor, conn)
+    # recurse, but using another thread.  I'm not sure, but I believe this avoids busy-waiting 
+    # even on the new thread.  This needs more looking into to be sure if it's optimal
+    threading.Timer(QUOTE_LIFESPAN, trigger_maintainer, args=(cursor, conn)).start()
+    return 0
+
 def main():
     cursor, conn = initdb()
+
+    #start the trigger maintainer thread
+    threading.Timer(QUOTE_LIFESPAN, trigger_maintainer, args=(cursor, conn)).start()
+
     while True:
         var = input("Enter a command: ")
         command = var.split(' ', 1)[0]
