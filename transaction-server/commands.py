@@ -327,9 +327,9 @@ def set_buy_amount(user_id, stock_symbol, amount, cursor, conn):
                     'FROM triggers              '
                     'WHERE username = %s        '
                     'AND stock_symbol = %s;     '
-                    , (user_id, stock_symbol))
+                    , (user_id, stock_symbol)) 
     existing_setbuy_amount = cursor.fetchone() # this is a tuple containing 1 string or None
-    setbuy_exists = True
+    setbuy_exists = None # placeholder value, will become True/False
     difference = 0
     if existing_setbuy_amount is None:
         setbuy_exists = False
@@ -363,6 +363,7 @@ def set_buy_amount(user_id, stock_symbol, amount, cursor, conn):
     return
 
 """ PREVIOUS VERSION - DOESN'T ACCOUNT FOR EXISTING ORDER WHEN COMPARING TO ACCOUNT BALANCE
+    LEAVE THIS ONE AROUND UNTIL THE ABOVE VERSION HAS BEEN TESTED FURTHER (JAN 30TH)
     # the logic of this next set of nested if statements is as follows:
     # - ensure the user has enough money in their account to reserve the amount needed for the SET_BUY
     # - if not enough money, cancel the request
@@ -396,8 +397,28 @@ def set_buy_amount(user_id, stock_symbol, amount, cursor, conn):
     return 0
 """
 
-def cancel_set_buy(user_id, stock_symbol):
-    return 0
+def cancel_set_buy(user_id, stock_symbol, cursor, conn):
+    cursor.execute( 'SELECT purchase_amount from triggers        '
+                    'WHERE username = %s    '
+                    'AND stock_symbol = %s; '
+                    ,(user_id, stock_symbol))
+    result = cursor.fetchone()
+    if result is None:
+        print("SET_BUY does not exist, no action taken")
+        return
+    else:
+        print("SET_BUY being cancelled...")
+        cursor.execute( 'DELETE FROM triggers   '
+                        'WHERE username = %s    '
+                        'AND stock_symbol = %s; '
+                        , (user_id, stock_symbol))
+        amount_to_refund = float(result[0])
+        print("refund size:", amount_to_refund)
+        cursor.execute( 'UPDATE users SET balance = balance + %s    '
+                        'WHERE username = %s                        '
+                        ,(amount_to_refund, user_id))
+        conn.commit()
+    return 
 
 def set_buy_trigger(user_id, stock_symbol, amount):
     return 0
@@ -473,6 +494,13 @@ def main():
                 print("Invalid Input.  <SET_BUY_AMOUNT USER_ID STOCK_SYMBOL AMOUNT>")
             else:
                 set_buy_amount(user_id, stock_symbol, amount, cursor, conn)
+        elif command == "CANCEL_SET_BUY":
+            try:
+                command, user_id, stock_symbol = var.split()
+            except ValueError:
+                print("invalid Input.  <CANCEL_SET_BUY USER_ID STOCK_SYMBOL>")
+            else:
+                cancel_set_buy(user_id, stock_symbol, cursor, conn)
         elif command == "quit":
             break
         else:
