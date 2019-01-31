@@ -55,6 +55,7 @@ def initdb():
                         '(username VARCHAR(20) NOT NULL references users(username)  '
                         'ON DELETE CASCADE ON UPDATE CASCADE,                       '
                         'stock_symbol VARCHAR(3) NOT NULL,                          '
+                        'type VARCHAR(5) NOT NULL,                                  '
                         'trigger_amount FLOAT,                                      '
                         'purchase_amount FLOAT NOT NULL,                            '
                         'PRIMARY KEY (username, stock_symbol));                     ')
@@ -326,8 +327,9 @@ def set_buy_amount(user_id, stock_symbol, amount, cursor, conn):
     cursor.execute( 'SELECT purchase_amount     '
                     'FROM triggers              '
                     'WHERE username = %s        '
-                    'AND stock_symbol = %s;     '
-                    , (user_id, stock_symbol)) 
+                    'AND stock_symbol = %s      '
+                    'AND type = %s;             '
+                    , (user_id, stock_symbol, 'buy')) 
     existing_setbuy_amount = cursor.fetchone() # this is a tuple containing 1 string or None
     setbuy_exists = None # placeholder value, will become True/False
     difference = 0
@@ -355,49 +357,43 @@ def set_buy_amount(user_id, stock_symbol, amount, cursor, conn):
         if setbuy_exists:
             cursor.execute( 'UPDATE triggers SET purchase_amount = %s   '
                             'WHERE username = %s                        '
-                            'AND stock_symbol = %s;                     '
-                            ,(amount, user_id, stock_symbol))
+                            'AND stock_symbol = %s                      '
+                            'AND type = %s;                             '
+                            ,(amount, user_id, stock_symbol, 'buy'))
         else: # setbuy_exists = False
-            cursor.execute( 'INSERT INTO triggers (username, stock_symbol, purchase_amount) values (%s, %s, %s);', (user_id, stock_symbol, amount))
+            cursor.execute( 'INSERT INTO triggers (username, stock_symbol, type, purchase_amount)   ' 
+                            'VALUES (%s, %s, %s, %s);                                               '
+                            ,(user_id, stock_symbol, 'buy', amount))
         conn.commit()
     return
 
-""" PREVIOUS VERSION - DOESN'T ACCOUNT FOR EXISTING ORDER WHEN COMPARING TO ACCOUNT BALANCE
-    LEAVE THIS ONE AROUND UNTIL THE ABOVE VERSION HAS BEEN TESTED FURTHER (JAN 30TH)
-    # the logic of this next set of nested if statements is as follows:
-    # - ensure the user has enough money in their account to reserve the amount needed for the SET_BUY
-    # - if not enough money, cancel the request
-    # - If they have enough, remove the money from their account 
-    # - and determine whether there is already a SET_BUY order for this user and this stock
-    # - If there is, then modify the SET_BUY amount to the amount provided and refund/debit the user account as required
-    # - If not, create a new record in triggers
-    if balance > amount: # note: '>= is not appropriate with floats, since 'equal to' is meaningless due to rounding errors.
-        print("balance is sufficient")
-        print("amount:", amount, "balance:", balance)
-        # remove amount from user's account
-        
-        # check to see if this stock has a SET_BUY order for this user
-        cursor.execute('SELECT purchase_amount FROM triggers WHERE username = %s AND stock_symbol = %s;', (user_id, stock_symbol))
-        result = cursor.fetchone()
-        if result is None: # no duplicate SET_BUY order exists
-            cursor.execute('UPDATE users SET balance = balance - %s where username = %s', (amount, user_id))
-            cursor.execute('INSERT INTO triggers (username, stock_symbol, purchase_amount) values (%s, %s, %s);', (user_id, stock_symbol, amount))
-            conn.commit()
-        else: # duplicate record exists, so modify the SET_BUY amount and correct the user's account balance
-            prev_amount = float(result[0])
-            difference = prev_amount - amount
-            cursor.execute('UPDATE users SET balance = balance + %s where username = %s', (difference, user_id))
-            cursor.execute('UPDATE triggers SET purchase_amount = %s where username = %s and stock_symbol = %s;', (amount, user_id, stock_symbol))
-            conn.commit()
-    else: # balance < amount, so deny the request
-        print("funds not available")
-        print("amount:", amount, "balance:", balance)
-        return
-
-    return 0
-"""
 
 def cancel_set_buy(user_id, stock_symbol, cursor, conn):
+    cursor.execute( 'SELECT purchase_amount from triggers   '
+                    'WHERE username = %s                    '
+                    'AND stock_symbol = %s                  ' 
+                    'AND type = %s;                         '
+                    ,(user_id, stock_symbol, 'buy'))
+    result = cursor.fetchone()
+    if result is None:
+        print("SET_BUY does not exist, no action taken")
+        return
+    else:
+        print("SET_BUY being cancelled...")
+        cursor.execute( 'DELETE FROM triggers   '
+                        'WHERE username = %s    '
+                        'AND stock_symbol = %s  '
+                        'AND type = %s;         '
+                        ,(user_id, stock_symbol, 'buy'))
+        amount_to_refund = float(result[0])
+        print("refund size:", amount_to_refund)
+        cursor.execute( 'UPDATE users SET balance = balance + %s    '
+                        'WHERE username = %s                        '
+                        ,(amount_to_refund, user_id))
+        conn.commit()
+    return 
+
+def set_buy_trigger(user_id, stock_symbol, amount, cursor, conn):
     cursor.execute( 'SELECT purchase_amount from triggers        '
                     'WHERE username = %s    '
                     'AND stock_symbol = %s; '
@@ -407,21 +403,12 @@ def cancel_set_buy(user_id, stock_symbol, cursor, conn):
         print("SET_BUY does not exist, no action taken")
         return
     else:
-        print("SET_BUY being cancelled...")
-        cursor.execute( 'DELETE FROM triggers   '
-                        'WHERE username = %s    '
-                        'AND stock_symbol = %s; '
-                        , (user_id, stock_symbol))
-        amount_to_refund = float(result[0])
-        print("refund size:", amount_to_refund)
-        cursor.execute( 'UPDATE users SET balance = balance + %s    '
+        cursor.execute( 'UPDATE triggers SET trigger_amount = %s    '
                         'WHERE username = %s                        '
-                        ,(amount_to_refund, user_id))
+                        'AND stock_symbol = %s;                     '
+                        ,(amount, user_id, stock_symbol))
         conn.commit()
     return 
-
-def set_buy_trigger(user_id, stock_symbol, amount):
-    return 0
 
 def set_sell_amount(user_id, stock_symbol, amount):
     return 0
@@ -501,6 +488,14 @@ def main():
                 print("invalid Input.  <CANCEL_SET_BUY USER_ID STOCK_SYMBOL>")
             else:
                 cancel_set_buy(user_id, stock_symbol, cursor, conn)
+        elif command == "SET_BUY_TRIGGER":
+            try:
+                command, user_id, symbol, amount = var.split()
+            except ValueError:
+                print("invalid Input. <SET_BUY_TRIGGER USER_ID STOCK_SYMBOL AMOUNT>")
+            else:
+                set_buy_trigger(user_id, symbol, amount, cursor, conn)
+
         elif command == "quit":
             break
         else:
