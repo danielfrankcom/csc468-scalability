@@ -31,7 +31,7 @@ def initdb():
         # Recreate all tables in the database
         cursor.execute( 'CREATE TABLE users                               '
                         '(username VARCHAR(20) NOT NULL PRIMARY KEY,      '
-                        'balance FLOAT NOT NULL);                        ')
+                        'balance FLOAT NOT NULL);                         ')
         conn.commit()
 
         cursor.execute( 'CREATE TABLE stocks                                 '
@@ -57,8 +57,8 @@ def initdb():
                         'stock_symbol VARCHAR(3) NOT NULL,                          '
                         'type VARCHAR(5) NOT NULL,                                  '
                         'trigger_amount FLOAT,                                      '
-                        'purchase_amount FLOAT NOT NULL,                            '
-                        'PRIMARY KEY (username, stock_symbol));                     ')
+                        'transaction_amount FLOAT NOT NULL,                         '
+                        'PRIMARY KEY (username, stock_symbol, type));               ')
         conn.commit()
         return cursor, conn
     except (Exception, psycopg2.DatabaseError) as error:
@@ -322,9 +322,8 @@ def cancel_sell(user_id):
 # by set_buy_trigger() before the trigger goes 'live'. 
 def set_buy_amount(user_id, stock_symbol, amount, cursor, conn):
     amount = float(amount)
-   
     # Does SET_BUY order exist for this user/stock combo?
-    cursor.execute( 'SELECT purchase_amount     '
+    cursor.execute( 'SELECT transaction_amount  '
                     'FROM triggers              '
                     'WHERE username = %s        '
                     'AND stock_symbol = %s      '
@@ -355,24 +354,24 @@ def set_buy_amount(user_id, stock_symbol, amount, cursor, conn):
         
         # if the order existed already, update it with the new BUY_AMOUNT, else create new record
         if setbuy_exists:
-            cursor.execute( 'UPDATE triggers SET purchase_amount = %s   '
-                            'WHERE username = %s                        '
-                            'AND stock_symbol = %s                      '
-                            'AND type = %s;                             '
+            cursor.execute( 'UPDATE triggers SET transaction_amount = %s    '
+                            'WHERE username = %s                            '
+                            'AND stock_symbol = %s                          '
+                            'AND type = %s;                                 '
                             ,(amount, user_id, stock_symbol, 'buy'))
         else: # setbuy_exists = False
-            cursor.execute( 'INSERT INTO triggers (username, stock_symbol, type, purchase_amount)   ' 
-                            'VALUES (%s, %s, %s, %s);                                               '
+            cursor.execute( 'INSERT INTO triggers (username, stock_symbol, type, transaction_amount)    ' 
+                            'VALUES (%s, %s, %s, %s);                                                   '
                             ,(user_id, stock_symbol, 'buy', amount))
         conn.commit()
     return
 
 
 def cancel_set_buy(user_id, stock_symbol, cursor, conn):
-    cursor.execute( 'SELECT purchase_amount from triggers   '
-                    'WHERE username = %s                    '
-                    'AND stock_symbol = %s                  ' 
-                    'AND type = %s;                         '
+    cursor.execute( 'SELECT transaction_amount from triggers    '
+                    'WHERE username = %s                        '
+                    'AND stock_symbol = %s                      ' 
+                    'AND type = %s;                             '
                     ,(user_id, stock_symbol, 'buy'))
     result = cursor.fetchone()
     if result is None:
@@ -394,10 +393,11 @@ def cancel_set_buy(user_id, stock_symbol, cursor, conn):
     return 
 
 def set_buy_trigger(user_id, stock_symbol, amount, cursor, conn):
-    cursor.execute( 'SELECT purchase_amount from triggers        '
+    cursor.execute( 'SELECT transaction_amount from triggers        '
                     'WHERE username = %s    '
-                    'AND stock_symbol = %s; '
-                    ,(user_id, stock_symbol))
+                    'AND stock_symbol = %s  '
+                    'AND type = %s;         '
+                    ,(user_id, stock_symbol, 'buy'))
     result = cursor.fetchone()
     if result is None:
         print("SET_BUY does not exist, no action taken")
@@ -405,19 +405,102 @@ def set_buy_trigger(user_id, stock_symbol, amount, cursor, conn):
     else:
         cursor.execute( 'UPDATE triggers SET trigger_amount = %s    '
                         'WHERE username = %s                        '
-                        'AND stock_symbol = %s;                     '
-                        ,(amount, user_id, stock_symbol))
+                        'AND stock_symbol = %s                      '
+                        'AND type = %s;                             '
+                        ,(amount, user_id, stock_symbol, 'buy'))
         conn.commit()
     return 
 
-def set_sell_amount(user_id, stock_symbol, amount):
-    return 0
+#TODO: if set_sell of this stock already exists, account for that stock when
+#      determining whether user owns enough stock to create set_sell order
+def set_sell_amount(user_id, stock_symbol, amount, cursor, conn):
+    # verify amount is an integer value
+    try:
+        amount = int(amount)
+    except ValueError:
+        print('invalid amount of stock, must input integer values to sell')
+        return
 
-def set_sell_trigger(user_id, stock_symbol, amount):
-    return 0
+    # check if user owns enough stock to carry out this transaction
+    cursor.execute( 'SELECT stock_quantity from stocks      '
+                    'WHERE username = %s                    '
+                    'AND stock_symbol = %s;                 '
+                    ,(user_id, stock_symbol))
+    shares_owned = cursor.fetchone()
+    if shares_owned is None:
+        print("User owns no shares of type:", stock_symbol, " - request denied")
+        return
+    elif shares_owned[0] < amount:
+        print("User does not own enough shares of type:", stock_symbol, "to proceed - request denied")
+        return
+    else:   # user owns sufficient shares to proceed, so remove them from user account and create order
+        cursor.execute( 'UPDATE stocks SET stock_quantity = stock_quantity - %s '
+                        'WHERE username = %s                                    '
+                        'AND stock_symbol = %s                                  '
+                        ,(amount, user_id, stock_symbol))
+        # Does SET_SELL order exist for this user/stock combo?  If yes, modify record, else create new one
+        cursor.execute( 'SELECT transaction_amount     '
+                        'FROM triggers              '
+                        'WHERE username = %s        '
+                        'AND stock_symbol = %s      '
+                        'AND type = %s;             '
+                        ,(user_id, stock_symbol, 'sell')) 
+        result = cursor.fetchone() # this is a tuple containing 1 string or None
+        if result is None:
+            cursor.execute( 'INSERT INTO triggers (username, stock_symbol, type, transaction_amount)   ' 
+                            'VALUES (%s, %s, %s, %s);                                               '
+                            ,(user_id, stock_symbol, 'sell', amount))
+        else: #modify existing record
+            cursor.execute( 'UPDATE triggers SET amount = amount + %s   '
+                            'WHERE username = %s                        '
+                            'AND stock_symbol = %s                      '
+                            'AND type = %s                              '
+                            ,(amount, user_id, stock_symbol, 'sell'))
+        conn.commit()
+    return
 
-def cancel_set_sell(user_id, stock_symbol):
-    return 0
+def set_sell_trigger(user_id, stock_symbol, amount, cursor, conn):
+    cursor.execute( 'SELECT transaction_amount from triggers        '
+                    'WHERE username = %s    '
+                    'AND stock_symbol = %s  '
+                    'AND type = %s;         '
+                    ,(user_id, stock_symbol, 'sell'))
+    result = cursor.fetchone()
+    if result is None:
+        print("SET_SELL does not exist, no action taken")
+        return
+    else:
+        cursor.execute( 'UPDATE triggers SET trigger_amount = %s    '
+                        'WHERE username = %s                        '
+                        'AND stock_symbol = %s                      '
+                        'AND type = %s;                             '
+                        ,(amount, user_id, stock_symbol, 'sell'))
+        conn.commit()
+    return 
+
+def cancel_set_sell(user_id, stock_symbol, cursor, conn):
+    cursor.execute( 'SELECT transaction_amount FROM triggers   '
+                    'WHERE username = %s                    '
+                    'AND stock_symbol = %s;                '
+                    ,(user_id, stock_symbol))
+    result = cursor.fetchone()
+    if result is None:
+        print("order does not exist.  Request denied")
+        return
+    else:
+        stock_amount_to_refund = result[0]
+        print("order exists, will cancel it")
+        cursor.execute('DELETE FROM triggers   '
+                        'WHERE username = %s    '
+                        'AND stock_symbol = %s  '
+                        'AND type = %s;         '
+                        ,(user_id, stock_symbol, 'sell'))
+        # refund stocks to user
+        cursor.execute( 'UPDATE stocks SET stock_quantity = stock_quantity + %s '
+                        'WHERE username = %s                                    '
+                        'AND stock_symbol = %s;                                 '
+                        ,(stock_amount_to_refund, user_id, stock_symbol))
+    return 
 
 def dumplog(user_id, filename):
     return 0
@@ -439,19 +522,33 @@ def trigger_maintainer(cursor, conn):
         stock_symbol = row[1]
         buy_or_sell = row[2]
         trigger_amount = row[3]
-        purchase_amount = row[4]
+        transaction_amount = row[4]
         current_price = quote(user_id, stock_symbol)[0]
-        print("row details: user_id:", user_id, "stock_symbol:", stock_symbol, "buy_or_sell:", buy_or_sell, "trigger_amount:", trigger_amount, "purchase_amount:", purchase_amount, "current_price:", current_price)
-        if buy_or_sell == 'buy' and current_price <= trigger_amount:
-            num_stocks_to_buy = int(purchase_amount/current_price)
-            leftover_cash = purchase_amount - (current_price * num_stocks_to_buy)
+        print("row details: user_id:", user_id, "stock_symbol:", stock_symbol, "buy_or_sell:", buy_or_sell, "trigger_amount:", trigger_amount, "transaction_amount:", transaction_amount, "current_price:", current_price)
+        if buy_or_sell == 'buy' and current_price <= trigger_amount: # trigger the buy
+            num_stocks_to_buy = int(transaction_amount/current_price)
+            leftover_cash = transaction_amount - (current_price * num_stocks_to_buy)
 
-            # purchase the stocks
-            cursor.execute( 'UPDATE stocks                              '
-                            'SET stock_quantity = stock_quantity + %s   '
-                            'WHERE username = %s                        '
-                            'AND stock_symbol = %s;                     '
-                            ,(num_stocks_to_buy, user_id, stock_symbol))
+            # if user already had this stock, then update amount
+            cursor.execute( 'SELECT stock_quantity from stocks  '
+                            'WHERE username = %s                '
+                            'AND stock_symbol = %s              '
+                            ,(user_id, stock_symbol))
+            result = cursor.fetchone()
+
+            if result is None: # the user had none of this stock previously
+                cursor.execute( 'INSERT INTO stocks (username, stock_symbol, stock_quantity)    ' 
+                                'VALUES (%s, %s, %s);                                       '
+                                ,(user_id, stock_symbol, num_stocks_to_buy))
+            else: # the user already had this type of stock
+
+                # purchase the stocks
+                    stock_symbol, num_stocks_to_buy, current_price)
+                cursor.execute( 'UPDATE stocks                              '
+                                'SET stock_quantity = stock_quantity + %s   '
+                                'WHERE username = %s                        '
+                                'AND stock_symbol = %s;                     '
+                                ,(num_stocks_to_buy, user_id, stock_symbol))
 
             # credit user account leftover cash
             cursor.execute( 'UPDATE users SET balance = balance + %s        '
@@ -466,9 +563,20 @@ def trigger_maintainer(cursor, conn):
                             ,(user_id, stock_symbol, buy_or_sell))
             conn.commit()
 
-        elif buy_or_sell == 'sell' and current_price >= trigger_amount:
-            sell(user_id, stock_symbol, purchase_amount, cursor, conn)
-            commit_sell(user_id, cursor, conn)
+        #TODO: implement the elif below
+        elif buy_or_sell == 'sell' and current_price >= trigger_amount: # trigger the sell
+            cash_from_sale = current_price * transaction_amount
+            # credit user account from sale
+            cursor.execute( 'UPDATE users SET balance = balance + %s    '
+                            'WHERE username = %s;                       '
+                            ,(cash_from_sale, user_id))
+            # remove the trigger
+            cursor.execute( 'DELETE FROM triggers   '
+                            'WHERE username = %s     '
+                            'AND stock_symbol = %s  '
+                            'AND type = %s;         '
+                            ,(user_id, stock_symbol, buy_or_sell))
+
     # recurse, but using another thread.  I'm not sure, but I believe this avoids busy-waiting 
     # even on the new thread.  This needs more looking into to be sure if it's optimal
     threading.Timer(QUOTE_LIFESPAN, trigger_maintainer, args=(cursor, conn)).start()
@@ -531,23 +639,44 @@ def main():
             try:
                 command, user_id, stock_symbol, amount = var.split()
             except ValueError:
-                print("Invalid Input.  <SET_BUY_AMOUNT USER_ID STOCK_SYMBOL AMOUNT>")
+                print("Invalid input.  <SET_BUY_AMOUNT USER_ID STOCK_SYMBOL AMOUNT>")
             else:
                 set_buy_amount(user_id, stock_symbol, amount, cursor, conn)
         elif command == "CANCEL_SET_BUY":
             try:
                 command, user_id, stock_symbol = var.split()
             except ValueError:
-                print("invalid Input.  <CANCEL_SET_BUY USER_ID STOCK_SYMBOL>")
+                print("Invalid input.  <CANCEL_SET_BUY USER_ID STOCK_SYMBOL>")
             else:
                 cancel_set_buy(user_id, stock_symbol, cursor, conn)
         elif command == "SET_BUY_TRIGGER":
             try:
                 command, user_id, symbol, amount = var.split()
             except ValueError:
-                print("invalid Input. <SET_BUY_TRIGGER USER_ID STOCK_SYMBOL AMOUNT>")
+                print("Invalid input. <SET_BUY_TRIGGER USER_ID STOCK_SYMBOL AMOUNT>")
             else:
                 set_buy_trigger(user_id, symbol, amount, cursor, conn)
+        elif command == "SET_SELL_AMOUNT":
+            try:
+                command, user_id, stock_symbol, amount = var.split()
+            except ValueError:
+                print("Invalid input.  <SET_SELL_AMOUNT USER_ID STOCK_SYMBOL AMOUNT>")
+            else:
+                set_sell_amount(user_id, stock_symbol, amount, cursor, conn)
+        elif command == "CANCEL_SET_SELL":
+            try:
+                command, user_id, stock_symbol = var.split()
+            except ValueError:
+                print("Invalid input.  <CANCEL_SET_SELL USER_ID STOCK_SYMBOL>")
+            else:
+                cancel_set_sell(user_id, stock_symbol, cursor, conn)
+        elif command == "SET_SELL_TRIGGER":
+            try:
+                command, user_id, symbol, amount = var.split()
+            except ValueError:
+                print("Invalid input. <SET_SELL_TRIGGER USER_ID STOCK_SYMBOL AMOUNT>")
+            else:
+                set_sell_trigger(user_id, symbol, amount, cursor, conn)
 
         elif command == "quit":
             break
