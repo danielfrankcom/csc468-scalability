@@ -47,6 +47,7 @@ def initdb():
                         'username VARCHAR(20) references users(username),           '
                         'stock_symbol VARCHAR(3) NOT NULL,                          '
                         'stock_quantity INT NOT NULL,                               '
+                        'price FLOAT NOT NULL,                                      '
                         'amount FLOAT NOT NULL,                                     '
                         'timestamp FLOAT NOT NULL);                                 ')      
 
@@ -139,7 +140,7 @@ def buy_timeout(user_id, stock_symbol, dollar_amount, cursor, conn):
         return
     else: # the reservation still exists, so delete it and refund the cash back to user's account
         reservationid = result[0]
-        reserved_cash = result[5]
+        reserved_cash = result[6]
         cursor.execute('DELETE FROM reserved WHERE reservationid = %s;', (str(reservationid,)))    
         cursor.execute('SELECT balance FROM users where username = %s;', (user_id,))
         result = cursor.fetchall()
@@ -169,7 +170,7 @@ def buy(user_id, stock_symbol, amount, cursor, conn):
                 # CAN AFFORD THE STOCK
                 cursor.execute("UPDATE users SET balance = balance - %s WHERE username = %s;", (float(amount), user_id))
                 conn.commit()
-                cursor.execute("INSERT INTO reserved (type, username, stock_symbol, stock_quantity, amount, timestamp) VALUES (%s, %s, %s, %s, %s, %s);", ('buy', user_id, stock_symbol, int(float(amount)/price), amount, round(time.time(), 5),))
+                cursor.execute("INSERT INTO reserved (type, username, stock_symbol, stock_quantity, price, amount, timestamp) VALUES (%s, %s, %s, %s, %s, %s, %s);", ('buy', user_id, stock_symbol, int(float(amount)/price), price, amount, round(time.time(), 5),))
                 conn.commit() 
 
                 # create timer, when timer finishes have it cancel the buy
@@ -190,7 +191,8 @@ def commit_buy(user_id, cursor, conn):
         print("No buy to commit")
     # BUY TO COMMIT
     else:
-        cursor.execute('SELECT reservationid, stock_symbol, stock_quantity, amount FROM reserved WHERE type = %s AND username = %s AND timestamp = (SELECT MAX(timestamp) FROM reserved WHERE type = %s AND username = %s);', ('buy', user_id, 'buy', user_id))
+        print("GOT HERE GOT HERE GOT HERE")
+        cursor.execute('SELECT reservationid, stock_symbol, stock_quantity, amount, price FROM reserved WHERE type = %s AND username = %s AND timestamp = (SELECT MAX(timestamp) FROM reserved WHERE type = %s AND username = %s);', ('buy', user_id, 'buy', user_id))
         conn.commit()
 
         elements = cursor.fetchone()
@@ -198,6 +200,7 @@ def commit_buy(user_id, cursor, conn):
         stock_symbol = elements[1]
         stock_quantity = elements[2]
         amount = elements[3]
+        price = elements[4]
         
         # See if the user already owns any of this stock
         cursor.execute('SELECT * FROM stocks WHERE username = %s and stock_symbol = %s', (user_id, stock_symbol,))
@@ -211,6 +214,10 @@ def commit_buy(user_id, cursor, conn):
         else:
             cursor.execute('UPDATE stocks SET stock_quantity = stock_quantity + %s WHERE username = %s and stock_symbol = %s;', (stock_quantity, user_id, stock_symbol))
             conn.commit()
+        
+        print("adding ", amount-(price*stock_quantity), " back to the account")
+        cursor.execute('UPDATE users SET balance = balance + %s WHERE username = %s', (amount-(price*stock_quantity), user_id))    
+        conn.commit()       
 
         cursor.execute('DELETE FROM reserved WHERE reservationid = %s', (reservationid,))    
         conn.commit()        
@@ -248,7 +255,7 @@ def sell(user_id, stock_symbol, amount, cursor, conn):
                 if stock_quantity[0][0] >= stocks_to_sell and stocks_to_sell != 0:
                     cursor.execute("UPDATE stocks SET stock_quantity = stock_quantity - %s WHERE username = %s AND stock_symbol = %s", (stocks_to_sell, user_id, stock_symbol,))
                     conn.commit()
-                    cursor.execute("INSERT INTO reserved (type, username, stock_symbol, stock_quantity, amount, timestamp) VALUES (%s, %s, %s, %s, %s, %s);", ('sell', user_id, stock_symbol, stocks_to_sell, amount, round(time.time(), 5),))
+                    cursor.execute("INSERT INTO reserved (type, username, stock_symbol, stock_quantity, price, amount, timestamp) VALUES (%s, %s, %s, %s, %s, %s, %s);", ('sell', user_id, stock_symbol, stocks_to_sell, price, amount, round(time.time(), 5),))
                     conn.commit() 
 
                     # create timer, when timer finishes have it cancel the buy
@@ -272,14 +279,14 @@ def commit_sell(user_id, cursor, conn):
         print("No sell to commit")
     # SELL TO COMMIT
     else:
-        cursor.execute( 'SELECT reservationid, stock_symbol, stock_quantity, amount '
-                        'FROM reserved                                              '
-                        'WHERE type = %s                                            '
-                        'AND username = %s                                          '
-                        'AND timestamp = (SELECT MAX(timestamp)                     '
-                        '                 FROM reserved                             '
-                        '                 WHERE type = %s                           '
-                        '                 AND username = %s);                       '
+        cursor.execute( 'SELECT reservationid, stock_symbol, stock_quantity, amount, price      '
+                        'FROM reserved                                                          '
+                        'WHERE type = %s                                                        '
+                        'AND username = %s                                                      '
+                        'AND timestamp = (SELECT MAX(timestamp)                                 '
+                        '                 FROM reserved                                         '
+                        '                 WHERE type = %s                                       '
+                        '                 AND username = %s);                                   '
                         , ('sell', user_id, 'sell', user_id))
         conn.commit()
 
@@ -288,8 +295,9 @@ def commit_sell(user_id, cursor, conn):
         stock_symbol = elements[1]
         stock_quantity = elements[2]
         amount = elements[3]
+        price = elements[4]
 
-        cursor.execute('UPDATE users SET balance = balance + %s where username = %s', (amount, user_id))
+        cursor.execute('UPDATE users SET balance = balance + %s where username = %s', (stock_quantity*price, user_id))
         conn.commit()
         cursor.execute('DELETE FROM reserved WHERE reservationid = %s', (reservationid,))    
         conn.commit()        
