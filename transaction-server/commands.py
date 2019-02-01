@@ -102,9 +102,6 @@ def add(user_id, amount, cursor, conn):
         cursor.execute('INSERT INTO users VALUES (%s, %s)', (user_id, amount))
         conn.commit()
 
-
-
-
         return
 
 # get_quote() is used to directly acquire a quote from the quote server (eventually)
@@ -233,7 +230,6 @@ def commit_buy(user_id, cursor, conn):
         print("No buy to commit")
     # BUY TO COMMIT
     else:
-        print("GOT HERE GOT HERE GOT HERE")
         cursor.execute('SELECT reservationid, stock_symbol, stock_quantity, amount, price FROM reserved WHERE type = %s AND username = %s AND timestamp = (SELECT MAX(timestamp) FROM reserved WHERE type = %s AND username = %s);', ('buy', user_id, 'buy', user_id))
         conn.commit()
 
@@ -257,7 +253,6 @@ def commit_buy(user_id, cursor, conn):
             cursor.execute('UPDATE stocks SET stock_quantity = stock_quantity + %s WHERE username = %s and stock_symbol = %s;', (stock_quantity, user_id, stock_symbol))
             conn.commit()
         
-        print("adding ", amount-(price*stock_quantity), " back to the account")
         cursor.execute('UPDATE users SET balance = balance + %s WHERE username = %s', (amount-(price*stock_quantity), user_id))    
         conn.commit()       
 
@@ -432,12 +427,15 @@ def dumplog(user_id, filename):
 def display_summary(user_id):
     return 0
 
+<<<<<<< HEAD
 def dumplog(filename):
     XMLTree.write(filename)
 
 def dumplog_user(user_id, filename):
     return 0
 
+=======
+>>>>>>> 394d24f0c65a641d2ed52071d11bf574cc10fada
 def main():
     cursor, conn = initdb()
     while True:
@@ -487,6 +485,7 @@ def main():
                 print("Invalid Input. <COMMIT_SELL USER_ID>")
             else:    
                 commit_sell(user_id, cursor, conn)
+<<<<<<< HEAD
         elif command == "CANCEL_SELL":
             try:
                 command, user_id = var.split()
@@ -506,6 +505,8 @@ def main():
                     dumplog(filename)
             else:    
                 dumplog_user(user_id, filename)   
+=======
+>>>>>>> 394d24f0c65a641d2ed52071d11bf574cc10fada
         elif command == "quit":
             break
         else:
