@@ -543,7 +543,6 @@ def trigger_maintainer(cursor, conn):
             else: # the user already had this type of stock
 
                 # purchase the stocks
-                    stock_symbol, num_stocks_to_buy, current_price)
                 cursor.execute( 'UPDATE stocks                              '
                                 'SET stock_quantity = stock_quantity + %s   '
                                 'WHERE username = %s                        '
