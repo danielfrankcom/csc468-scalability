@@ -8,8 +8,8 @@ VERIFICATION FUNCTION DEFINITIONS
 
 def _isTimestamp(candidate):
     if (isinstance(candidate, int)
-            and candidate >= 1514764800000
-            and candidate <= 1525132800000):
+            and candidate >= 1546300800000
+            and candidate <= 1556668800000):
         return True
     return False
 
