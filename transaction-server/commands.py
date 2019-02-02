@@ -64,6 +64,10 @@ def initdb():
                         'transaction_amount FLOAT NOT NULL,                         '
                         'PRIMARY KEY (username, stock_symbol, type));               ')
         conn.commit()
+
+        #start the trigger maintainer thread
+        threading.Timer(QUOTE_LIFESPAN, trigger_maintainer, args=(cursor, conn)).start()
+
         return cursor, conn
     except (Exception, psycopg2.DatabaseError) as error:
         print(error)
@@ -713,8 +717,9 @@ def trigger_maintainer(cursor, conn):
 def main():
     cursor, conn = initdb()
 
+    # THIS HAS BEEN MOVED TO initdb()
     #start the trigger maintainer thread
-    threading.Timer(QUOTE_LIFESPAN, trigger_maintainer, args=(cursor, conn)).start()
+#    threading.Timer(QUOTE_LIFESPAN, trigger_maintainer, args=(cursor, conn)).start()
 
     while True:
         var = input("Enter a command: ")
