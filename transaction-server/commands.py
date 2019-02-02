@@ -21,7 +21,6 @@ def initdb():
         psql_server = 'localhost'
         psql_port = 5432
         
-        print('Connecting...')
         conn = psycopg2.connect(dbname=psql_db,user=psql_user,password=psql_password,host=psql_server,port=psql_port)
 
         cursor = conn.cursor()
@@ -90,6 +89,19 @@ def add(user_id, amount, cursor, conn):
     if cursor.fetchall() == []:
         cursor.execute('INSERT INTO users VALUES (%s, %s)', (user_id, amount))
         conn.commit()
+
+        transaction = AccountTransaction()
+        attributes = {
+            "timestamp": int(time.time() * 1000), 
+            "server": "DDJK",
+            "transactionNum": next(transaction_number),
+            "action": "add", 
+            "username": user_id,
+            "funds": float(amount)
+        }
+        transaction.updateAll(**attributes)
+        XMLTree.append(transaction)
+
         return
     else:
         cursor.execute('SELECT username FROM users;')
@@ -98,6 +110,19 @@ def add(user_id, amount, cursor, conn):
             if i[0] == user_id:
                 cursor.execute('UPDATE users SET balance = balance + %s where username = %s;', (amount, user_id))
                 conn.commit()
+
+                transaction = AccountTransaction()
+                attributes = {
+                    "timestamp": int(time.time() * 1000), 
+                    "server": "DDJK",
+                    "transactionNum": next(transaction_number),
+                    "action": "add", 
+                    "username": user_id,
+                    "funds": float(amount)
+                }
+                transaction.updateAll(**attributes)
+                XMLTree.append(transaction)
+
                 return
          
         cursor.execute('INSERT INTO users VALUES (%s, %s)', (user_id, amount))
@@ -202,6 +227,19 @@ def buy(user_id, stock_symbol, amount, cursor, conn):
                 # CAN AFFORD THE STOCK
                 cursor.execute("UPDATE users SET balance = balance - %s WHERE username = %s;", (float(amount), user_id))
                 conn.commit()
+
+                transaction = AccountTransaction()
+                attributes = {
+                    "timestamp": int(time.time() * 1000), 
+                    "server": "DDJK",
+                    "transactionNum": next(transaction_number),
+                    "action": "remove", 
+                    "username": user_id,
+                    "funds": float(amount)
+                }
+                transaction.updateAll(**attributes)
+                XMLTree.append(transaction)
+
                 cursor.execute("INSERT INTO reserved (type, username, stock_symbol, stock_quantity, price, amount, timestamp) VALUES (%s, %s, %s, %s, %s, %s, %s);", ('buy', user_id, stock_symbol, int(float(amount)/price), price, amount, round(time.time(), 5),))
                 conn.commit() 
 
