@@ -1,10 +1,15 @@
 import psycopg2
-import time, threading
+import time, threading, datetime
 import random # used to gen random numbers in get_quote()
+from xml_writer import *
+from itertools import count
 
 QUOTE_LIFESPAN = 10.0 # period of time a quote is valid for (will be 60.0 for deployed software)
 accounts = []
 cached_quotes = {}
+
+XMLTree = LogBuilder()
+transaction_number = count(1)
 
 def initdb():
     conn = None
@@ -16,7 +21,6 @@ def initdb():
         psql_server = 'localhost'
         psql_port = 5432
         
-        print('Connecting...')
         conn = psycopg2.connect(dbname=psql_db,user=psql_user,password=psql_password,host=psql_server,port=psql_port)
 
         cursor = conn.cursor()
@@ -68,7 +72,6 @@ def initdb():
     except (Exception, psycopg2.DatabaseError) as error:
         print(error)
 
-
 def closedb(cursor):
     cursor.close()
 
@@ -76,9 +79,33 @@ def add(user_id, amount, cursor, conn):
     cursor.execute('SELECT username FROM users;')
     conn.commit()
 
+    command = UserCommand()
+    attributes = {
+        "timestamp": int(time.time() * 1000), 
+        "server": "DDJK",
+        "transactionNum": next(transaction_number),
+        "command": "ADD",
+        "funds": float(amount)
+    }
+    command.updateAll(**attributes)
+    XMLTree.append(command)
+
     if cursor.fetchall() == []:
         cursor.execute('INSERT INTO users VALUES (%s, %s)', (user_id, amount))
         conn.commit()
+
+        transaction = AccountTransaction()
+        attributes = {
+            "timestamp": int(time.time() * 1000), 
+            "server": "DDJK",
+            "transactionNum": next(transaction_number),
+            "action": "add", 
+            "username": user_id,
+            "funds": float(amount)
+        }
+        transaction.updateAll(**attributes)
+        XMLTree.append(transaction)
+
         return
     else:
         cursor.execute('SELECT username FROM users;')
@@ -87,10 +114,24 @@ def add(user_id, amount, cursor, conn):
             if i[0] == user_id:
                 cursor.execute('UPDATE users SET balance = balance + %s where username = %s;', (amount, user_id))
                 conn.commit()
+
+                transaction = AccountTransaction()
+                attributes = {
+                    "timestamp": int(time.time() * 1000), 
+                    "server": "DDJK",
+                    "transactionNum": next(transaction_number),
+                    "action": "add", 
+                    "username": user_id,
+                    "funds": float(amount)
+                }
+                transaction.updateAll(**attributes)
+                XMLTree.append(transaction)
+
                 return
          
         cursor.execute('INSERT INTO users VALUES (%s, %s)', (user_id, amount))
         conn.commit()
+
         return
 
 # get_quote() is used to directly acquire a quote from the quote server (eventually)
@@ -98,7 +139,6 @@ def add(user_id, amount, cursor, conn):
 # 1.0 and 10.0. 
 def get_quote(user_id, stock_symbol):
         time_of_quote = round(time.time(), 5)
-        print("Getting quote from quote server for", stock_symbol, "at time: ", time_of_quote)
         new_price = round(random.uniform(1.0, 10.0), 2)
         return new_price, time_of_quote        
 
@@ -163,6 +203,19 @@ def buy(user_id, stock_symbol, amount, cursor, conn):
     cursor.execute('SELECT username FROM users;')
     conn.commit()
     
+    command = UserCommand()
+    attributes = {
+        "timestamp": int(time.time() * 1000), 
+        "server": "DDJK",
+        "transactionNum": next(transaction_number),
+        "command": "BUY",
+        "username": user_id,
+        "stockSymbol": stock_symbol,
+        "funds": float(amount)
+    }
+    command.updateAll(**attributes)
+    XMLTree.append(command)
+    
     price, stock_symbol, user_id, time_of_quote, cryptokey = quote(user_id, stock_symbol)
 
     for i in cursor.fetchall():
@@ -175,6 +228,19 @@ def buy(user_id, stock_symbol, amount, cursor, conn):
                 # CAN AFFORD THE STOCK
                 cursor.execute("UPDATE users SET balance = balance - %s WHERE username = %s;", (float(amount), user_id))
                 conn.commit()
+
+                transaction = AccountTransaction()
+                attributes = {
+                    "timestamp": int(time.time() * 1000), 
+                    "server": "DDJK",
+                    "transactionNum": next(transaction_number),
+                    "action": "remove", 
+                    "username": user_id,
+                    "funds": float(amount)
+                }
+                transaction.updateAll(**attributes)
+                XMLTree.append(transaction)
+
                 cursor.execute("INSERT INTO reserved (type, username, stock_symbol, stock_quantity, price, amount, timestamp) VALUES (%s, %s, %s, %s, %s, %s, %s);", ('buy', user_id, stock_symbol, int(float(amount)/price), price, amount, round(time.time(), 5),))
                 conn.commit() 
 
@@ -191,12 +257,22 @@ def commit_buy(user_id, cursor, conn):
     cursor.execute('SELECT * FROM reserved WHERE type = %s AND username = %s AND timestamp > %s;', ('buy', user_id, round(time.time(), 5)-60))
     conn.commit()
 
+    command = UserCommand()
+    attributes = {
+        "timestamp": int(time.time() * 1000), 
+        "server": "DDJK",
+        "transactionNum": next(transaction_number),
+        "command": "COMMIT_BUY",
+        "username": user_id
+    }
+    command.updateAll(**attributes)
+    XMLTree.append(command)
+
     # NO BUY TO COMMIT
     if cursor.fetchall() == []:
         print("No buy to commit")
     # BUY TO COMMIT
     else:
-        print("GOT HERE GOT HERE GOT HERE")
         cursor.execute('SELECT reservationid, stock_symbol, stock_quantity, amount, price FROM reserved WHERE type = %s AND username = %s AND timestamp = (SELECT MAX(timestamp) FROM reserved WHERE type = %s AND username = %s);', ('buy', user_id, 'buy', user_id))
         conn.commit()
 
@@ -220,7 +296,6 @@ def commit_buy(user_id, cursor, conn):
             cursor.execute('UPDATE stocks SET stock_quantity = stock_quantity + %s WHERE username = %s and stock_symbol = %s;', (stock_quantity, user_id, stock_symbol))
             conn.commit()
         
-        print("adding ", amount-(price*stock_quantity), " back to the account")
         cursor.execute('UPDATE users SET balance = balance + %s WHERE username = %s', (amount-(price*stock_quantity), user_id))    
         conn.commit()       
 
@@ -231,6 +306,18 @@ def commit_buy(user_id, cursor, conn):
 def cancel_buy(user_id, cursor, conn):
     cursor.execute('SELECT reservationid, amount FROM reserved WHERE type = %s AND username = %s AND timestamp = (SELECT MAX(timestamp) FROM reserved WHERE type = %s AND username = %s);', ('buy', user_id, 'buy', user_id))
     conn.commit()
+
+    command = UserCommand()
+    attributes = {
+        "timestamp": int(time.time() * 1000), 
+        "server": "DDJK",
+        "transactionNum": next(transaction_number),
+        "command": "CANCEL_BUY",
+        "username": user_id
+    }
+    command.updateAll(**attributes)
+    XMLTree.append(command)
+
     elements = cursor.fetchone()
     if elements is None:    # no orders exist for this user
         return
@@ -246,6 +333,19 @@ def sell(user_id, stock_symbol, amount, cursor, conn):
     cursor.execute('SELECT username FROM users;')
     conn.commit()
     
+    command = UserCommand()
+    attributes = {
+        "timestamp": int(time.time() * 1000), 
+        "server": "DDJK",
+        "transactionNum": next(transaction_number),
+        "command": "SELL",
+        "username": user_id,
+        "stockSymbol": stock_symbol,
+        "funds": float(amount)
+    }
+    command.updateAll(**attributes)
+    XMLTree.append(command)
+
     price, stock_symbol, user_id, time_of_quote, cryptokey = quote(user_id, stock_symbol)
 
     for i in cursor.fetchall():
@@ -279,6 +379,17 @@ def commit_sell(user_id, cursor, conn):
     cursor.execute('SELECT * FROM reserved WHERE type = %s AND username = %s AND timestamp > %s;', ('sell', user_id, round(time.time(), 5)-60))
     conn.commit()
 
+    command = UserCommand()
+    attributes = {
+        "timestamp": int(time.time() * 1000), 
+        "server": "DDJK",
+        "transactionNum": next(transaction_number),
+        "command": "COMMIT_SELL",
+        "username": user_id
+    }
+    command.updateAll(**attributes)
+    XMLTree.append(command)
+
     # NO SELL TO COMMIT
     if cursor.fetchall() == []:
         print("No sell to commit")
@@ -308,14 +419,27 @@ def commit_sell(user_id, cursor, conn):
         conn.commit()        
     return
 
-def cancel_sell(user_id):
-    cursor.execute('SELECT reservationid, stock_quantity FROM reserved WHERE type = %s AND username = %s AND timestamp = (SELECT MAX(timestamp) FROM reserved WHERE type = %s AND username = %s);', ('sell', user_id, 'sell', user_id))
+def cancel_sell(user_id, cursor, conn):
+    cursor.execute('SELECT reservationid, stock_symbol, stock_quantity FROM reserved WHERE type = %s AND username = %s AND timestamp = (SELECT MAX(timestamp) FROM reserved WHERE type = %s AND username = %s);', ('sell', user_id, 'sell', user_id))
     conn.commit()
+
+    command = UserCommand()
+    attributes = {
+        "timestamp": int(time.time() * 1000), 
+        "server": "DDJK",
+        "transactionNum": next(transaction_number),
+        "command": "CANCEL_SELL",
+        "username": user_id
+    }
+    command.updateAll(**attributes)
+    XMLTree.append(command)
+
     elements = cursor.fetchone()
     if elements is None:    # no orders exist for this user
         return
     reservationid = elements[0]
-    stock_quantity = elements[1]
+    stock_symbol = elements[1]
+    stock_quantity = elements[2]
     cursor.execute("UPDATE stocks SET stock_quantity = stock_quantity + %s WHERE username = %s AND stock_symbol = %s", (stock_quantity, user_id, stock_symbol))
     conn.commit()
     cursor.execute('DELETE FROM reserved WHERE reservationid = %s', (reservationid,))    
@@ -583,6 +707,11 @@ def trigger_maintainer(cursor, conn):
     # recurse, but using another thread.  I'm not sure, but I believe this avoids busy-waiting 
     # even on the new thread.  This needs more looking into to be sure if it's optimal
     threading.Timer(QUOTE_LIFESPAN, trigger_maintainer, args=(cursor, conn)).start()
+
+def dumplog(filename):
+    XMLTree.write(filename)
+
+def dumplog_user(user_id, filename):
     return 0
 
 def main():
@@ -681,7 +810,25 @@ def main():
                 print("Invalid input. <SET_SELL_TRIGGER USER_ID STOCK_SYMBOL AMOUNT>")
             else:
                 set_sell_trigger(user_id, symbol, amount, cursor, conn)
-
+        elif command == "CANCEL_SELL":
+            try:
+                command, user_id = var.split()
+            except ValueError:
+                print("Invalid Input. <COMMIT_SELL USER_ID>")
+            else:    
+                cancel_sell(user_id, cursor, conn)        
+        elif command == "DUMPLOG":
+            try:
+                command, user_id, filename = var.split()
+            except ValueError:
+                try:
+                    command, filename = var.split()
+                except ValueError:
+                    print("Invalid Input. Functionality: <DUMPLOG FILENAME> or <DUMPLOG USERNAME FILENAME")
+                else: 
+                    dumplog(filename)
+            else:    
+                dumplog_user(user_id, filename)   
         elif command == "quit":
             break
         else:
