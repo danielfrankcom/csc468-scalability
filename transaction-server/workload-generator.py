@@ -141,5 +141,7 @@ for work in workload:
         break
     else:
         print(arguments, " Invalid Command")
+commands.dumplog('testdumplog.xml')
 
-commands.closedb(cursor)
+# this sleep is added to avoid the buy/sell timout threads from crashing when the main process closes before they do
+time.sleep(30) commands.closedb(cursor)
