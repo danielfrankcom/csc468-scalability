@@ -1,2 +1,0 @@
-./gradlew build
-java -jar build/libs/http-workload-generator-1.0-SNAPSHOT.jar

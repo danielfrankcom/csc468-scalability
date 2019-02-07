@@ -1,0 +1,3 @@
+rootProject.name = 'http-workload-generator'
+
+include 'workload-generator'

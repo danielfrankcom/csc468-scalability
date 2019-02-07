@@ -1,26 +1,51 @@
 version: '3'
 services:
-  nginx:
-      build: ./nginx
-      tty: true
-      ports:
-          - '80:80'
-      networks:
-        - nginx_network
-
-  workload-generator:
-      build: ./workload-generator
-      stdin_open: true
-      tty: true
-      environment:
-          - STATS=1
-          - NUM_THREADS=10
-      volumes:
-          - ./workload-generator/src:/src
-          - ./workload-generator/workloads:/workloads
-      networks:
-          - nginx_network
-
-networks:
-  nginx_network:
-    driver: bridge
+    postgres:
+        image: postgres:11.1
+        restart: on-failure
+        environment:
+            - POSTGRES_USER=${DB_USER}
+            - POSTGRES_PASSWORD=${DB_PASS}
+        volumes:
+            - ./database:/docker-entrypoint-initdb.d/:ro
+    adminer:
+        image: michalhosna/adminer:4.7.0
+        depends_on:
+            - postgres
+        restart: on-failure
+        ports:
+            - ${ADMINER_PORT}:8080
+        environment:
+            - ADMINER_DRIVER=pgsql
+            - ADMINER_DB=postgres
+            - ADMINER_SERVER=postgres
+            - ADMINER_USERNAME=${DB_USER}
+            - ADMINER_PASSWORD=${DB_PASS}
+            - ADMINER_AUTOLOGIN=1
+    transaction-server:
+        build: transaction-server
+        depends_on:
+            - postgres
+        restart: on-failure
+        ports:
+            - ${TRANSACTION_PORT}:5000
+        volumes:
+            - ./transaction-server/src:/src:ro
+            - ./transaction-server/out:/out:rw
+        environment:
+            - PYTHONUNBEFFERED=TRUE
+    workload-generator:
+        build: workload-generator
+        depends_on:
+            - transaction-server
+        volumes:
+            - ./workload-generator/:/src:rw
+            - ./workloads:/workloads:ro
+    webserver:
+        image: nginx:1.14
+        restart: on-failure
+        ports:
+            - ${WEB_SERVER_PORT}:80
+        volumes:
+            - ./webserver/nginx.conf:/etc/nginx/nginx.conf:ro
+            - ./webserver/html:/usr/share/nginx/html:ro
