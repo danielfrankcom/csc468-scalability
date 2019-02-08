@@ -36,6 +36,7 @@ services:
             - PYTHONUNBEFFERED=TRUE
     workload-generator:
         build: workload-generator
+        restart: on-failure
         depends_on:
             - transaction-server
         volumes:

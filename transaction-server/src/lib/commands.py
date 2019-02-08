@@ -49,50 +49,27 @@ def add(user_id, amount, cursor, conn):
     }
     command.updateAll(**attributes)
     XMLTree.append(command)
-
-    if cursor.fetchall() == []:
-        cursor.execute('INSERT INTO users VALUES (%s, %s)', (user_id, amount))
-        conn.commit()
-
-        transaction = AccountTransaction()
-        attributes = {
-            "timestamp": int(time.time() * 1000), 
-            "server": "DDJK",
-            "transactionNum": next(transaction_number),
-            "action": "add", 
-            "username": user_id,
-            "funds": float(amount)
-        }
-        transaction.updateAll(**attributes)
-        XMLTree.append(transaction)
-
-        return
-    else:
-        cursor.execute('SELECT username FROM users;')
-        conn.commit()
-        for i in cursor.fetchall():
-            if i[0] == user_id:
-                cursor.execute('UPDATE users SET balance = balance + %s where username = %s;', (amount, user_id))
-                conn.commit()
-
-                transaction = AccountTransaction()
-                attributes = {
-                    "timestamp": int(time.time() * 1000), 
-                    "server": "DDJK",
-                    "transactionNum": next(transaction_number),
-                    "action": "add", 
-                    "username": user_id,
-                    "funds": float(amount)
-                }
-                transaction.updateAll(**attributes)
-                XMLTree.append(transaction)
-
-                return
-         
-        cursor.execute('INSERT INTO users VALUES (%s, %s)', (user_id, amount))
-        conn.commit()
-
-        return
+    
+    function =  "INSERT INTO users (username, balance) " \
+                "VALUES ('{username}', {amount}) " \
+                "ON CONFLICT (username) DO UPDATE " \
+                "SET balance = (users.balance + {amount}) " \
+                "WHERE users.username = '{username}';".format(username=user_id, amount=amount)
+    
+    cursor.execute(function, (user_id, amount))
+    conn.commit()
+        
+    transaction = AccountTransaction()
+    attributes = {
+        "timestamp": int(time.time() * 1000), 
+        "server": "DDJK",
+        "transactionNum": next(transaction_number),
+        "action": "add", 
+        "username": user_id,
+        "funds": float(amount)
+    }
+    transaction.updateAll(**attributes)
+    XMLTree.append(transaction)
 
 # get_quote() is used to directly acquire a quote from the quote server (eventually)
 # for now, this is a placeholder function, and returns a random value between
@@ -267,7 +244,8 @@ def commit_buy(user_id, cursor, conn):
     }
     command.updateAll(**attributes)
     XMLTree.append(command)
-
+	
+	
     # NO BUY TO COMMIT
     if cursor.fetchall() == []:
         error = ErrorEvent()
@@ -283,6 +261,17 @@ def commit_buy(user_id, cursor, conn):
         XMLTree.append(error)
     # BUY TO COMMIT
     else:
+	
+		function =  "INSERT INTO users (username, balance) " \
+					"VALUES ('{username}', {amount}) " \
+					"ON CONFLICT (username) DO UPDATE " \
+					"SET balance = (users.balance + {amount}) " \
+					"WHERE users.username = '{username}';".format(username=user_id, amount=amount)
+		
+		cursor.execute(function, (user_id, amount))
+		conn.commit()
+		
+	
         cursor.execute('SELECT reservationid, stock_symbol, stock_quantity, amount, price FROM reserved WHERE type = %s AND username = %s AND timestamp = (SELECT MAX(timestamp) FROM reserved WHERE type = %s AND username = %s);', ('buy', user_id, 'buy', user_id))
         conn.commit()
 
