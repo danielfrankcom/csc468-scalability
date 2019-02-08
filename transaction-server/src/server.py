@@ -98,6 +98,13 @@ def parseCommand(raw):
             print("Invalid input.  <CANCEL_SET_SELL USER_ID STOCK_SYMBOL>")
         else:
             cancel_set_sell(user_id, stock_symbol, cursor, conn)
+    elif command == "CANCEL_SELL":
+        try:
+            command, user_id = arguments
+        except ValueError:
+            print("Invalid Input. <COMMIT_SELL USER_ID>")
+        else:    
+            cancel_sell(user_id, cursor, conn) 
     elif command == "SET_SELL_TRIGGER":
         try:
             command, user_id, symbol, amount = arguments

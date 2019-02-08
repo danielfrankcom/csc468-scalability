@@ -244,8 +244,8 @@ def commit_buy(user_id, cursor, conn):
     }
     command.updateAll(**attributes)
     XMLTree.append(command)
-	
-	
+    
+    
     # NO BUY TO COMMIT
     if cursor.fetchall() == []:
         error = ErrorEvent()
@@ -261,17 +261,7 @@ def commit_buy(user_id, cursor, conn):
         XMLTree.append(error)
     # BUY TO COMMIT
     else:
-	
-		function =  "INSERT INTO users (username, balance) " \
-					"VALUES ('{username}', {amount}) " \
-					"ON CONFLICT (username) DO UPDATE " \
-					"SET balance = (users.balance + {amount}) " \
-					"WHERE users.username = '{username}';".format(username=user_id, amount=amount)
-		
-		cursor.execute(function, (user_id, amount))
-		conn.commit()
-		
-	
+    
         cursor.execute('SELECT reservationid, stock_symbol, stock_quantity, amount, price FROM reserved WHERE type = %s AND username = %s AND timestamp = (SELECT MAX(timestamp) FROM reserved WHERE type = %s AND username = %s);', ('buy', user_id, 'buy', user_id))
         conn.commit()
 
@@ -282,21 +272,18 @@ def commit_buy(user_id, cursor, conn):
         amount = elements[3]
         price = elements[4]
         
-        # See if the user already owns any of this stock
-        cursor.execute('SELECT * FROM stocks WHERE username = %s and stock_symbol = %s', (user_id, stock_symbol,))
-        conn.commit()
         
-        # The user doesn't own any of this stock yet
-        if cursor.fetchall() == []:
-            cursor.execute('INSERT INTO stocks (username, stock_symbol, stock_quantity) VALUES (%s, %s, %s);', (user_id, stock_symbol, stock_quantity))
-            conn.commit()
-        # The user already owns some of this stock
-        else:
-            cursor.execute('UPDATE stocks SET stock_quantity = stock_quantity + %s WHERE username = %s and stock_symbol = %s;', (stock_quantity, user_id, stock_symbol))
-            conn.commit()
+        function =  "INSERT INTO stocks (username, stock_symbol, stock_quantity) " \
+                    "VALUES ('{username}', '{symbol}', {quantity}) " \
+                    "ON CONFLICT (username, stock_symbol) DO UPDATE " \
+                    "SET stock_quantity = (stocks.stock_quantity + {quantity}) " \
+                    "WHERE stocks.username = '{username}' and stocks.stock_symbol = '{symbol}';".format(username=user_id, symbol=stock_symbol, quantity=stock_quantity)
+        
+        cursor.execute(function, (user_id, amount))
         
         cursor.execute('UPDATE users SET balance = balance + %s WHERE username = %s', (amount-(price*stock_quantity), user_id))    
-        conn.commit()       
+        conn.commit
+        
 
         transaction = AccountTransaction()
         attributes = {
