@@ -88,13 +88,13 @@ def get_quote(user_id, stock_symbol):
         s.send(request.encode())
 
         # Read and print up to 1k of data.
-        data = s.recv(1024).decode()
+        data = s.recv(1024).decode().split("\n")[0]
 
         # close the connection, and the socket
         s.close()
 
         price, symbol, username, timestamp, cryptokey = data.split(",")
-        return float(price), timestamp, cryptokey        
+        return float(price), int(timestamp), cryptokey        
 
 # quote() is called when a client requests a quote.  It will return a valid price for the
 # stock as requested, but this value will either come from cached_quotes or from q hit
@@ -113,7 +113,7 @@ def quote(user_id, stock_symbol):
         "price": new_price, 
         "username": user_id,
         "stockSymbol": stock_symbol,
-        "quoteServerTime": int(time.time() * 1000),
+        "quoteServerTime": time_of_quote,
         "cryptokey": cryptokey
     }
     quote.updateAll(**attributes)
@@ -553,6 +553,7 @@ def cancel_sell(user_id, cursor, conn):
         XMLTree.append(error)
         
         return
+    elements = result[0]
     reservationid = elements[0]
     stock_symbol = elements[1]
     stock_quantity = elements[2]
