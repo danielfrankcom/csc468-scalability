@@ -1,4 +1,5 @@
 import psycopg2
+import socket, sys
 import time, threading, datetime
 import random # used to gen random numbers in get_quote()
 from lib.xml_writer import *
@@ -75,19 +76,34 @@ def add(user_id, amount, cursor, conn):
 # for now, this is a placeholder function, and returns a random value between
 # 1.0 and 10.0. 
 def get_quote(user_id, stock_symbol):
-        time_of_quote = round(time.time(), 5)
-        new_price = round(random.uniform(1.0, 10.0), 2)
-        return new_price, time_of_quote        
+
+        # Create the socket
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+        # Connect the socket
+        s.connect(('quoteserve.seng.uvic.ca', 4444))
+
+        # Send the user's query
+        request = "{symbol},{user}\n".format(symbol=stock_symbol, user=user_id)
+        s.send(request.encode())
+
+        # Read and print up to 1k of data.
+        data = s.recv(1024).decode()
+
+        # close the connection, and the socket
+        s.close()
+
+        price, symbol, username, timestamp, cryptokey = data.split(",")
+        return float(price), timestamp, cryptokey        
 
 # quote() is called when a client requests a quote.  It will return a valid price for the
 # stock as requested, but this value will either come from cached_quotes or from q hit
 # to the quote server directly.  In the case of the latter, the new quote will be put
 # in the cached_quotes dictionary
 def quote(user_id, stock_symbol):
-    cryptokey = '123450ABCDE' # placeholder, to be used until legacy quote servers are working
     # if not stock_symbol in cached_quotes.keys() or ((time.time() - cached_quotes[stock_symbol][1]) > QUOTE_LIFESPAN):
-        # get quote from server
-    new_price, time_of_quote = get_quote(user_id, stock_symbol)
+    # get quote from server
+    new_price, time_of_quote, cryptokey = get_quote(user_id, stock_symbol)
 
     quote = QuoteServer()
     attributes = {
@@ -98,18 +114,14 @@ def quote(user_id, stock_symbol):
         "username": user_id,
         "stockSymbol": stock_symbol,
         "quoteServerTime": int(time.time() * 1000),
-        "cryptokey": "123450ABCDE"
+        "cryptokey": cryptokey
     }
     quote.updateAll(**attributes)
     XMLTree.append(quote)
 
     # cached_quotes[stock_symbol] = (new_price, time_of_quote)
     return new_price, stock_symbol, user_id, time_of_quote, cryptokey
-#        return "1,ABC,Jaime,1234567,1234567890"
-    # else: #the cached price is valid, return that
-        # price = cached_quotes[stock_symbol][0] 
-        # time_of_quote = cached_quotes[stock_symbol][1] 
-        # return price, stock_symbol, user_id, time_of_quote, cryptokey 
+
 """ 
         need to send data to log file including:
         - "quoteServer" of type "QuoteServerType"
@@ -125,12 +137,14 @@ def quote(user_id, stock_symbol):
 """
 # Helper function - used to cancel buy orders after they timeout
 def buy_timeout(user_id, stock_symbol, dollar_amount, cursor, conn):
+    return
+    print("\n\n\n" + str(repr(stock_symbol)) + "    " + str(type(stock_symbol)) + "\n\n\n")
     cursor.execute('SELECT * FROM reserved WHERE    '
         'type = %s AND                              '
         'username = %s AND                          '
         'stock_symbol = %s AND                      '
         'amount = %s;                               ',
-        ('buy', user_id, stock_symbol, dollar_amount))
+        ('buy', user_id, unicode(str(stock_symbol), "utf-8"), dollar_amount))
     result = cursor.fetchone()
     if result is None: #order has already been manually confirmed or cancelled
         print("Timer for order is up, but the order is already gone")
@@ -170,7 +184,12 @@ def buy(user_id, stock_symbol, amount, cursor, conn):
     
     price, stock_symbol, user_id, time_of_quote, cryptokey = quote(user_id, stock_symbol)
 
-    for i in cursor.fetchall():
+    result = None
+    try:
+        result = cursor.fetchall()
+    except:
+        result = []
+    for i in result:
         if i[0] == user_id:
             # USER EXISTS
             cursor.execute("SELECT balance FROM users WHERE username = %s", (user_id,))
@@ -316,8 +335,9 @@ def cancel_buy(user_id, cursor, conn):
     command.updateAll(**attributes)
     XMLTree.append(command)
 
-    elements = cursor.fetchone()
-    if elements is None:    # no orders exist for this user
+    result = cursor.fetchall()
+    print("\n\n\n\n" + str(len(result)) + "\n\n\n\n")
+    if len(result) == 0:
         error = ErrorEvent()
         attributes = {
             "timestamp": int(time.time() * 1000), 
@@ -331,6 +351,8 @@ def cancel_buy(user_id, cursor, conn):
         XMLTree.append(error)
         
         return
+
+    elements = result[0]
     reservationid = elements[0]
     amount = elements[1]
     cursor.execute('UPDATE users SET balance = balance + %s where username = %s', (amount, user_id))
@@ -371,7 +393,12 @@ def sell(user_id, stock_symbol, amount, cursor, conn):
 
     price, stock_symbol, user_id, time_of_quote, cryptokey = quote(user_id, stock_symbol)
 
-    for i in cursor.fetchall():
+    result = None
+    try:
+        result = cursor.fetchall()
+    except:
+        result = []
+    for i in result:
         # USER EXISTS
         if i[0] == user_id:
             cursor.execute("SELECT stock_quantity FROM stocks WHERE username = %s AND stock_symbol = %s", (user_id, stock_symbol))
@@ -510,8 +537,9 @@ def cancel_sell(user_id, cursor, conn):
     command.updateAll(**attributes)
     XMLTree.append(command)
 
-    elements = cursor.fetchone()
-    if elements is None:    # no orders exist for this user
+    result = cursor.fetchall()
+    print("\n\n\n\n" + str(len(result)) + "\n\n\n\n")
+    if len(result) == 0:
         error = ErrorEvent()
         attributes = {
             "timestamp": int(time.time() * 1000), 
@@ -638,8 +666,9 @@ def cancel_set_buy(user_id, stock_symbol, cursor, conn):
                     'AND stock_symbol = %s                      ' 
                     'AND type = %s;                             '
                     ,(user_id, stock_symbol, 'buy'))
-    result = cursor.fetchone()
-    if result is None:
+    result = cursor.fetchall()
+    print("\n\n\n\n" + str(len(result)) + "\n\n\n\n")
+    if len(result) == 0:
         error = ErrorEvent()
         attributes = {
             "timestamp": int(time.time() * 1000), 
@@ -661,7 +690,7 @@ def cancel_set_buy(user_id, stock_symbol, cursor, conn):
                         'AND stock_symbol = %s  '
                         'AND type = %s;         '
                         ,(user_id, stock_symbol, 'buy'))
-        amount_to_refund = float(result[0])
+        amount_to_refund = float(result[0][0])
         print("refund size:", amount_to_refund)
         cursor.execute( 'UPDATE users SET balance = balance + %s    '
                         'WHERE username = %s                        '
@@ -872,8 +901,9 @@ def cancel_set_sell(user_id, stock_symbol, cursor, conn):
                     'WHERE username = %s                    '
                     'AND stock_symbol = %s;                '
                     ,(user_id, stock_symbol))
-    result = cursor.fetchone()
-    if result is None:
+    result = cursor.fetchall()
+    print("\n\n\n\n" + str(len(result)) + "\n\n\n\n")
+    if len(result) == 0:
         error = ErrorEvent()
         attributes = {
             "timestamp": int(time.time() * 1000), 
@@ -887,7 +917,7 @@ def cancel_set_sell(user_id, stock_symbol, cursor, conn):
         XMLTree.append(error)
         return
     else:
-        stock_amount_to_refund = result[0]
+        stock_amount_to_refund = result[0][0]
         print("order exists, will cancel it")
         cursor.execute('DELETE FROM triggers   '
                         'WHERE username = %s    '

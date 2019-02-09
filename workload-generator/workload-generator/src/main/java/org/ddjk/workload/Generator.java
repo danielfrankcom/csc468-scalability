@@ -95,20 +95,17 @@ public class Generator {
         final List<Future<Response>> responses = new ArrayList<>(requests.length);
         for (Request request : requests) {
             Future<Response> response = client.executeRequest(request);
-            responses.add(response);
-        }
 
-        for (Future<Response> future : responses) {
-            final Response response;
+            final Response actual;
             try {
-                response = future.get();
+                actual = response.get();
             } catch (Throwable e) {
                 e.printStackTrace();
                 System.out.println("Exception occurred while parsing response");
                 break;
             }
 
-            final int statusCode = response.getStatusCode();
+            final int statusCode = actual.getStatusCode();
             if (statusCode != 200) {
                 System.out.printf("Request returned status code %d.\n", statusCode);
             }

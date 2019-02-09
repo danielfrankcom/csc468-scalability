@@ -29,6 +29,7 @@ services:
         restart: unless-stopped
         ports:
             - ${TRANSACTION_PORT}:5000
+            - 4444:4444
         volumes:
             - ./transaction-server/src:/src:ro
             - ./transaction-server/out:/out:rw
