@@ -26,7 +26,7 @@ services:
         build: transaction-server
         depends_on:
             - postgres
-        restart: on-failure
+        restart: unless-stopped
         ports:
             - ${TRANSACTION_PORT}:5000
         volumes:
