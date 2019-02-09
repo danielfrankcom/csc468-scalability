@@ -11,6 +11,8 @@ cached_quotes = {}
 XMLTree = LogBuilder()
 transaction_number = count(1)
 
+# Initialize database with pg_ctl -D /usr/local/var/postgres restart
+
 def initdb():
     conn = None
     try:
@@ -39,16 +41,8 @@ def add(user_id, amount, cursor, conn):
     cursor.execute('SELECT username FROM users;')
     conn.commit()
 
-    command = UserCommand()
-    attributes = {
-        "timestamp": int(time.time() * 1000), 
-        "server": "DDJK",
-        "transactionNum": next(transaction_number),
-        "command": "ADD",
-        "funds": float(amount)
-    }
-    command.updateAll(**attributes)
-    XMLTree.append(command)
+    # User Command log file entry
+    user_command(int(time.time()*1000), "DDJK", next(transaction_number), "ADD", username = user_id, funds = float(amount))
     
     function =  "INSERT INTO users (username, balance) " \
                 "VALUES ('{username}', {amount}) " \
@@ -58,26 +52,17 @@ def add(user_id, amount, cursor, conn):
     
     cursor.execute(function, (user_id, amount))
     conn.commit()
-        
-    transaction = AccountTransaction()
-    attributes = {
-        "timestamp": int(time.time() * 1000), 
-        "server": "DDJK",
-        "transactionNum": next(transaction_number),
-        "action": "add", 
-        "username": user_id,
-        "funds": float(amount)
-    }
-    transaction.updateAll(**attributes)
-    XMLTree.append(transaction)
+
+    # Account Transaction log file entry
+    account_transaction(int(time.time() * 1000), "DDJK", next(transaction_number), "ADD", user_id, float(amount))
 
 # get_quote() is used to directly acquire a quote from the quote server (eventually)
 # for now, this is a placeholder function, and returns a random value between
 # 1.0 and 10.0. 
 def get_quote(user_id, stock_symbol):
-        time_of_quote = round(time.time(), 5)
-        new_price = round(random.uniform(1.0, 10.0), 2)
-        return new_price, time_of_quote        
+    time_of_quote = round(time.time(), 5)
+    new_price = round(random.uniform(1.0, 10.0), 2)
+    return new_price, time_of_quote        
 
 # quote() is called when a client requests a quote.  It will return a valid price for the
 # stock as requested, but this value will either come from cached_quotes or from q hit
@@ -89,19 +74,7 @@ def quote(user_id, stock_symbol):
         # get quote from server
     new_price, time_of_quote = get_quote(user_id, stock_symbol)
 
-    quote = QuoteServer()
-    attributes = {
-        "timestamp": int(time.time() * 1000), 
-        "server": "DDJK",
-        "transactionNum": next(transaction_number),
-        "price": new_price, 
-        "username": user_id,
-        "stockSymbol": stock_symbol,
-        "quoteServerTime": int(time.time() * 1000),
-        "cryptokey": "123450ABCDE"
-    }
-    quote.updateAll(**attributes)
-    XMLTree.append(quote)
+    quote_server(int(time.time() * 1000), "DDJK", next(transaction_number), new_price, user_id, stock_symbol, int(time.time() * 1000), "123450ABCDE")
 
     # cached_quotes[stock_symbol] = (new_price, time_of_quote)
     return new_price, stock_symbol, user_id, time_of_quote, cryptokey
@@ -138,7 +111,7 @@ def buy_timeout(user_id, stock_symbol, dollar_amount, cursor, conn):
     else: # the reservation still exists, so delete it and refund the cash back to user's account
         reservationid = result[0]
         reserved_cash = result[6]
-        cursor.execute('DELETE FROM reserved WHERE reservationid = %s;', (str(reservationid,)))    
+        cursor.execute('DELETE FROM reserved WHERE reservationid = %s;', (str(reservationid),))    
         cursor.execute('SELECT balance FROM users where username = %s;', (user_id,))
         result = cursor.fetchall()
         if result is None:
@@ -1001,10 +974,104 @@ def trigger_maintainer(cursor, conn):
     threading.Timer(QUOTE_LIFESPAN, trigger_maintainer, args=(cursor, conn)).start()
 
 def dumplog(filename):
+    command = UserCommand()
+    attributes = {
+        "timestamp": int(time.time() * 1000), 
+        "server": "DDJK",
+        "transactionNum": next(transaction_number),
+        "command": "DUMPLOG"
+    }
+    command.updateAll(**attributes)
+    XMLTree.append(command)
+    
     XMLTree.write(filename)
 
 def dumplog_user(user_id, filename):
-    return 0
+    command = UserCommand()
+    attributes = {
+        "timestamp": int(time.time() * 1000), 
+        "server": "DDJK",
+        "transactionNum": next(transaction_number),
+        "command": "DUMPLOG",
+        "username": user_id
+    }
+    command.updateAll(**attributes)
+    XMLTree.append(command)
+
+    XMLTree.writeFiltered(filename, user_id)
+
+def display_summary(user_id):
+    command = UserCommand()
+    attributes = {
+        "timestamp": int(time.time() * 1000), 
+        "server": "DDJK",
+        "transactionNum": next(transaction_number),
+        "command": "DISPLAY_SUMMARY",
+        "username": user_id
+    }
+    command.updateAll(**attributes)
+    XMLTree.append(command)
+
+def user_command(timestamp, server, transaction_num, commands, username = None, stock_symbol = None, filename = None, funds = None):
+    command = UserCommand()
+    command.update("timestamp", timestamp)
+    command.update("server", server)
+    command.update("transactionNum", transaction_num)
+    command.update("command", commands)
+    if (username):
+        command.update("username", username)
+    if (stock_symbol):
+        command.update("stockSymbol", stock_symbol)
+    if (filename):
+        command.update("filename", filename)
+    if (funds):
+        command.update("funds", funds)
+    XMLTree.append(command)
+
+def account_transaction(timestamp, server, transaction_num, action, username, funds):
+    transaction = AccountTransaction()
+    attributes = {
+    "timestamp": timestamp, 
+    "server": server,
+    "transactionNum": transaction_num,
+    "action": action,
+    "username": username,
+    "funds": funds
+    }
+    transaction.updateAll(**attributes)
+    XMLTree.append(transaction)
+
+
+def quote_server(timestamp, server, transaction_num, price, username, stock_symbol, quote_server_time, cryptokey):
+    quote = QuoteServer()
+    attributes = {
+    "timestamp": timestamp, 
+    "server": server,
+    "transactionNum": transaction_num,
+    "price": price,
+    "username": username,
+    "stockSymbol": stock_symbol,
+    "quoteServerTime": quote_server_time,
+    "cryptokey": cryptokey
+    }
+    quote.updateAll(**attributes)
+    XMLTree.append(quote)
+
+def error_event(timestamp, server, transaction_num, command, username = None, stock_symbol = None, filename = None, funds = None, error_event = None):
+    error = ErrorEvent()
+    error.updateAll(timestamp = timestamp, server = server, transactionNum = transaction_num, command = command)
+    if (username):
+        error.update("username", username)
+    if (stock_symbol):
+        error.update("stockSymbol", stock_symbol)
+    if (filename):
+        error.update("filename", filename)
+    if (funds):
+        error.update("funds", funds)
+    if (error_event):
+        error.update("errorMessage", error_event)
+    XMLTree.append(error)
+
 
 def main():
     cursor, conn = initdb()
