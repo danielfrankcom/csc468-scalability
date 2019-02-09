@@ -4,7 +4,7 @@ import random # used to gen random numbers in get_quote()
 from lib.xml_writer import *
 from itertools import count
 
-QUOTE_LIFESPAN = 10.0 # period of time a quote is valid for (will be 60.0 for deployed software)
+QUOTE_LIFESPAN = 60.0 # period of time a quote is valid for (will be 60.0 for deployed software)
 accounts = []
 cached_quotes = {}
 
@@ -138,7 +138,7 @@ def buy_timeout(user_id, stock_symbol, dollar_amount, cursor, conn):
     else: # the reservation still exists, so delete it and refund the cash back to user's account
         reservationid = result[0]
         reserved_cash = result[6]
-        cursor.execute('DELETE FROM reserved WHERE reservationid = %s;', (str(reservationid,)))    
+        cursor.execute('DELETE FROM reserved WHERE reservationid = %s;', (reservationid,))    
         cursor.execute('SELECT balance FROM users where username = %s;', (user_id,))
         result = cursor.fetchall()
         if result is None:
