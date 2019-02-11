@@ -10,7 +10,6 @@ accounts = []
 cached_quotes = {}
 
 XMLTree = LogBuilder()
-transaction_number = count(1)
 
 def initdb():
     conn = None
@@ -36,7 +35,7 @@ def initdb():
 def closedb(cursor):
     cursor.close()
 
-def add(user_id, amount, cursor, conn):
+def add(transaction_num, user_id, amount, cursor, conn):
     cursor.execute('SELECT username FROM users;')
     conn.commit()
 
@@ -44,7 +43,7 @@ def add(user_id, amount, cursor, conn):
     attributes = {
         "timestamp": int(time.time() * 1000), 
         "server": "DDJK",
-        "transactionNum": next(transaction_number),
+        "transactionNum": transaction_num,
         "command": "ADD",
         "funds": float(amount)
     }
@@ -64,7 +63,7 @@ def add(user_id, amount, cursor, conn):
     attributes = {
         "timestamp": int(time.time() * 1000), 
         "server": "DDJK",
-        "transactionNum": next(transaction_number),
+        "transactionNum": transaction_num,
         "action": "add", 
         "username": user_id,
         "funds": float(amount)
@@ -78,29 +77,29 @@ def add(user_id, amount, cursor, conn):
 def get_quote(user_id, stock_symbol):
 
         # Create the socket
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        #s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
         # Connect the socket
-        s.connect(('quoteserve.seng.uvic.ca', 4444))
+        #s.connect(('quoteserve.seng.uvic.ca', 4444))
 
         # Send the user's query
-        request = "{symbol},{user}\n".format(symbol=stock_symbol, user=user_id)
-        s.send(request.encode())
+        #request = "{symbol},{user}\n".format(symbol=stock_symbol, user=user_id)
+        #s.send(request.encode())
 
         # Read and print up to 1k of data.
-        data = s.recv(1024).decode().split("\n")[0]
+        #data = s.recv(1024).decode().split("\n")[0]
 
         # close the connection, and the socket
-        s.close()
+        #s.close()
 
-        price, symbol, username, timestamp, cryptokey = data.split(",")
+        price, symbol, username, timestamp, cryptokey = "20.01,BAD,usernamehere,1549827515,crytoKEY=123=o".split(",")
         return float(price), int(timestamp), cryptokey        
 
 # quote() is called when a client requests a quote.  It will return a valid price for the
 # stock as requested, but this value will either come from cached_quotes or from q hit
 # to the quote server directly.  In the case of the latter, the new quote will be put
 # in the cached_quotes dictionary
-def quote(user_id, stock_symbol):
+def quote(transaction_num, user_id, stock_symbol):
     # if not stock_symbol in cached_quotes.keys() or ((time.time() - cached_quotes[stock_symbol][1]) > QUOTE_LIFESPAN):
     # get quote from server
     new_price, time_of_quote, cryptokey = get_quote(user_id, stock_symbol)
@@ -109,7 +108,7 @@ def quote(user_id, stock_symbol):
     attributes = {
         "timestamp": int(time.time() * 1000), 
         "server": "DDJK",
-        "transactionNum": next(transaction_number),
+        "transactionNum": transaction_num,
         "price": new_price, 
         "username": user_id,
         "stockSymbol": stock_symbol,
@@ -137,14 +136,12 @@ def quote(user_id, stock_symbol):
 """
 # Helper function - used to cancel buy orders after they timeout
 def buy_timeout(user_id, stock_symbol, dollar_amount, cursor, conn):
-    return
-    print("\n\n\n" + str(repr(stock_symbol)) + "    " + str(type(stock_symbol)) + "\n\n\n")
     cursor.execute('SELECT * FROM reserved WHERE    '
         'type = %s AND                              '
         'username = %s AND                          '
         'stock_symbol = %s AND                      '
         'amount = %s;                               ',
-        ('buy', user_id, unicode(str(stock_symbol), "utf-8"), dollar_amount))
+        ('buy', user_id, stock_symbol, dollar_amount))
     result = cursor.fetchone()
     if result is None: #order has already been manually confirmed or cancelled
         print("Timer for order is up, but the order is already gone")
@@ -165,7 +162,7 @@ def buy_timeout(user_id, stock_symbol, dollar_amount, cursor, conn):
         print('buy order timout - the following buy order is now cancelled: ', 
             user_id, stock_symbol, dollar_amount)
 
-def buy(user_id, stock_symbol, amount, cursor, conn):
+def buy(transaction_num, user_id, stock_symbol, amount, cursor, conn):
     cursor.execute('SELECT username FROM users;')
     conn.commit()
     
@@ -173,7 +170,7 @@ def buy(user_id, stock_symbol, amount, cursor, conn):
     attributes = {
         "timestamp": int(time.time() * 1000), 
         "server": "DDJK",
-        "transactionNum": next(transaction_number),
+        "transactionNum": transaction_num,
         "command": "BUY",
         "username": user_id,
         "stockSymbol": stock_symbol,
@@ -182,14 +179,9 @@ def buy(user_id, stock_symbol, amount, cursor, conn):
     command.updateAll(**attributes)
     XMLTree.append(command)
     
-    price, stock_symbol, user_id, time_of_quote, cryptokey = quote(user_id, stock_symbol)
+    price, stock_symbol, user_id, time_of_quote, cryptokey = quote(transaction_num, user_id, stock_symbol)
 
-    result = None
-    try:
-        result = cursor.fetchall()
-    except:
-        result = []
-    for i in result:
+    for i in cursor.fetchall():
         if i[0] == user_id:
             # USER EXISTS
             cursor.execute("SELECT balance FROM users WHERE username = %s", (user_id,))
@@ -204,7 +196,7 @@ def buy(user_id, stock_symbol, amount, cursor, conn):
                 attributes = {
                     "timestamp": int(time.time() * 1000), 
                     "server": "DDJK",
-                    "transactionNum": next(transaction_number),
+                    "transactionNum": transaction_num,
                     "action": "remove", 
                     "username": user_id,
                     "funds": float(amount)
@@ -223,7 +215,7 @@ def buy(user_id, stock_symbol, amount, cursor, conn):
                 attributes = {
                     "timestamp": int(time.time() * 1000), 
                     "server": "DDJK",
-                    "transactionNum": next(transaction_number),
+                    "transactionNum": transaction_num,
                     "command": "BUY",
                     "username": user_id,
                     "stockSymbol": stock_symbol,
@@ -238,7 +230,7 @@ def buy(user_id, stock_symbol, amount, cursor, conn):
     attributes = {
         "timestamp": int(time.time() * 1000), 
         "server": "DDJK",
-        "transactionNum": next(transaction_number),
+        "transactionNum": transaction_num,
         "command": "BUY",
         "username": user_id,
         "stockSymbol": stock_symbol,
@@ -249,7 +241,7 @@ def buy(user_id, stock_symbol, amount, cursor, conn):
     XMLTree.append(error)
     return
 
-def commit_buy(user_id, cursor, conn):
+def commit_buy(transaction_num, user_id, cursor, conn):
     cursor.execute('SELECT * FROM reserved WHERE type = %s AND username = %s AND timestamp > %s;', ('buy', user_id, round(time.time(), 5)-60))
     conn.commit()
 
@@ -257,7 +249,7 @@ def commit_buy(user_id, cursor, conn):
     attributes = {
         "timestamp": int(time.time() * 1000), 
         "server": "DDJK",
-        "transactionNum": next(transaction_number),
+        "transactionNum": transaction_num,
         "command": "COMMIT_BUY",
         "username": user_id
     }
@@ -271,7 +263,7 @@ def commit_buy(user_id, cursor, conn):
         attributes = {
             "timestamp": int(time.time() * 1000), 
             "server": "DDJK",
-            "transactionNum": next(transaction_number),
+            "transactionNum": transaction_num,
             "command": "BUY",
             "username": user_id,
             "errorMessage": "No BUY to commit" 
@@ -308,7 +300,7 @@ def commit_buy(user_id, cursor, conn):
         attributes = {
             "timestamp": int(time.time() * 1000), 
             "server": "DDJK",
-            "transactionNum": next(transaction_number),
+            "transactionNum": transaction_num,
             "action": "add", 
             "username": user_id,
             "funds": float(amount-(price*stock_quantity))
@@ -320,7 +312,7 @@ def commit_buy(user_id, cursor, conn):
         conn.commit()        
     return
 
-def cancel_buy(user_id, cursor, conn):
+def cancel_buy(transaction_num, user_id, cursor, conn):
     cursor.execute('SELECT reservationid, amount FROM reserved WHERE type = %s AND username = %s AND timestamp = (SELECT MAX(timestamp) FROM reserved WHERE type = %s AND username = %s);', ('buy', user_id, 'buy', user_id))
     conn.commit()
 
@@ -328,21 +320,20 @@ def cancel_buy(user_id, cursor, conn):
     attributes = {
         "timestamp": int(time.time() * 1000), 
         "server": "DDJK",
-        "transactionNum": next(transaction_number),
+        "transactionNum": transaction_num,
         "command": "CANCEL_BUY",
         "username": user_id
     }
     command.updateAll(**attributes)
     XMLTree.append(command)
 
-    result = cursor.fetchall()
-    print("\n\n\n\n" + str(len(result)) + "\n\n\n\n")
-    if len(result) == 0:
+    elements = cursor.fetchone()
+    if elements is None:
         error = ErrorEvent()
         attributes = {
             "timestamp": int(time.time() * 1000), 
             "server": "DDJK",
-            "transactionNum": next(transaction_number),
+            "transactionNum": transaction_num,
             "command": "BUY",
             "username": user_id,
             "errorMessage": "No BUY to cancel" 
@@ -352,7 +343,6 @@ def cancel_buy(user_id, cursor, conn):
         
         return
 
-    elements = result[0]
     reservationid = elements[0]
     amount = elements[1]
     cursor.execute('UPDATE users SET balance = balance + %s where username = %s', (amount, user_id))
@@ -362,7 +352,7 @@ def cancel_buy(user_id, cursor, conn):
     attributes = {
         "timestamp": int(time.time() * 1000), 
         "server": "DDJK",
-        "transactionNum": next(transaction_number),
+        "transactionNum": transaction_num,
         "action": "add", 
         "username": user_id,
         "funds": float(amount)
@@ -374,7 +364,7 @@ def cancel_buy(user_id, cursor, conn):
     conn.commit()
     return 
 
-def sell(user_id, stock_symbol, amount, cursor, conn):
+def sell(transaction_num, user_id, stock_symbol, amount, cursor, conn):
     cursor.execute('SELECT username FROM users;')
     conn.commit()
     
@@ -382,7 +372,7 @@ def sell(user_id, stock_symbol, amount, cursor, conn):
     attributes = {
         "timestamp": int(time.time() * 1000), 
         "server": "DDJK",
-        "transactionNum": next(transaction_number),
+        "transactionNum": transaction_num,
         "command": "SELL",
         "username": user_id,
         "stockSymbol": stock_symbol,
@@ -391,14 +381,9 @@ def sell(user_id, stock_symbol, amount, cursor, conn):
     command.updateAll(**attributes)
     XMLTree.append(command)
 
-    price, stock_symbol, user_id, time_of_quote, cryptokey = quote(user_id, stock_symbol)
+    price, stock_symbol, user_id, time_of_quote, cryptokey = quote(transaction_num, user_id, stock_symbol)
 
-    result = None
-    try:
-        result = cursor.fetchall()
-    except:
-        result = []
-    for i in result:
+    for i in cursor.fetchall():
         # USER EXISTS
         if i[0] == user_id:
             cursor.execute("SELECT stock_quantity FROM stocks WHERE username = %s AND stock_symbol = %s", (user_id, stock_symbol))
@@ -420,7 +405,7 @@ def sell(user_id, stock_symbol, amount, cursor, conn):
                     attributes = {
                         "timestamp": int(time.time() * 1000), 
                         "server": "DDJK",
-                        "transactionNum": next(transaction_number),
+                        "transactionNum": transaction_num,
                         "command": "BUY",
                         "username": user_id,
                         "errorMessage": "User either does not own enough of the stock requested, or the stock is worth more than the price requested to sell" 
@@ -433,7 +418,7 @@ def sell(user_id, stock_symbol, amount, cursor, conn):
                 attributes = {
                     "timestamp": int(time.time() * 1000), 
                     "server": "DDJK",
-                    "transactionNum": next(transaction_number),
+                    "transactionNum": transaction_num,
                     "command": "BUY",
                     "username": user_id,
                     "errorMessage": "No stock of this type to sell" 
@@ -446,7 +431,7 @@ def sell(user_id, stock_symbol, amount, cursor, conn):
     attributes = {
         "timestamp": int(time.time() * 1000), 
         "server": "DDJK",
-        "transactionNum": next(transaction_number),
+        "transactionNum": transaction_num,
         "command": "BUY",
         "username": user_id,
         "errorMessage": "User does not exist" 
@@ -455,7 +440,7 @@ def sell(user_id, stock_symbol, amount, cursor, conn):
     XMLTree.append(error)
     return
 
-def commit_sell(user_id, cursor, conn):
+def commit_sell(transaction_num, user_id, cursor, conn):
     cursor.execute('SELECT * FROM reserved WHERE type = %s AND username = %s AND timestamp > %s;', ('sell', user_id, round(time.time(), 5)-60))
     conn.commit()
 
@@ -463,7 +448,7 @@ def commit_sell(user_id, cursor, conn):
     attributes = {
         "timestamp": int(time.time() * 1000), 
         "server": "DDJK",
-        "transactionNum": next(transaction_number),
+        "transactionNum": transaction_num,
         "command": "COMMIT_SELL",
         "username": user_id
     }
@@ -476,7 +461,7 @@ def commit_sell(user_id, cursor, conn):
         attributes = {
             "timestamp": int(time.time() * 1000), 
             "server": "DDJK",
-            "transactionNum": next(transaction_number),
+            "transactionNum": transaction_num,
             "command": "BUY",
             "username": user_id,
             "errorMessage": "No SELL to commit" 
@@ -510,7 +495,7 @@ def commit_sell(user_id, cursor, conn):
         attributes = {
             "timestamp": int(time.time() * 1000), 
             "server": "DDJK",
-            "transactionNum": next(transaction_number),
+            "transactionNum": transaction_num,
             "action": "add", 
             "username": user_id,
             "funds": float(stock_quantity*price)
@@ -522,7 +507,7 @@ def commit_sell(user_id, cursor, conn):
         conn.commit()        
     return
 
-def cancel_sell(user_id, cursor, conn):
+def cancel_sell(transaction_num, user_id, cursor, conn):
     cursor.execute('SELECT reservationid, stock_symbol, stock_quantity FROM reserved WHERE type = %s AND username = %s AND timestamp = (SELECT MAX(timestamp) FROM reserved WHERE type = %s AND username = %s);', ('sell', user_id, 'sell', user_id))
     conn.commit()
 
@@ -530,21 +515,20 @@ def cancel_sell(user_id, cursor, conn):
     attributes = {
         "timestamp": int(time.time() * 1000), 
         "server": "DDJK",
-        "transactionNum": next(transaction_number),
+        "transactionNum": transaction_num,
         "command": "CANCEL_SELL",
         "username": user_id
     }
     command.updateAll(**attributes)
     XMLTree.append(command)
 
-    result = cursor.fetchall()
-    print("\n\n\n\n" + str(len(result)) + "\n\n\n\n")
-    if len(result) == 0:
+    elements = cursor.fetchone()
+    if elements is None:
         error = ErrorEvent()
         attributes = {
             "timestamp": int(time.time() * 1000), 
             "server": "DDJK",
-            "transactionNum": next(transaction_number),
+            "transactionNum": transaction_num,
             "command": "BUY",
             "username": user_id,
             "errorMessage": "No SELL to cancel" 
@@ -553,7 +537,6 @@ def cancel_sell(user_id, cursor, conn):
         XMLTree.append(error)
         
         return
-    elements = result[0]
     reservationid = elements[0]
     stock_symbol = elements[1]
     stock_quantity = elements[2]
@@ -565,14 +548,14 @@ def cancel_sell(user_id, cursor, conn):
 
 # set_buy_amount allows a user to set a dollar amount of stock to buy.  This must be followed
 # by set_buy_trigger() before the trigger goes 'live'. 
-def set_buy_amount(user_id, stock_symbol, amount, cursor, conn):
+def set_buy_amount(transaction_num, user_id, stock_symbol, amount, cursor, conn):
     amount = float(amount)
 
     command = UserCommand()
     attributes = {
         "timestamp": int(time.time() * 1000), 
         "server": "DDJK",
-        "transactionNum": next(transaction_number),
+        "transactionNum": transaction_num,
         "command": "SET_BUY_AMOUNT",
         "username": user_id,
         "stockSymbol": stock_symbol,
@@ -607,7 +590,7 @@ def set_buy_amount(user_id, stock_symbol, amount, cursor, conn):
         attributes = {
             "timestamp": int(time.time() * 1000), 
             "server": "DDJK",
-            "transactionNum": next(transaction_number),
+            "transactionNum": transaction_num,
             "command": "BUY",
             "username": user_id,
             "errorMessage": "Insufficient Funds" 
@@ -626,7 +609,7 @@ def set_buy_amount(user_id, stock_symbol, amount, cursor, conn):
         attributes = {
             "timestamp": int(time.time() * 1000), 
             "server": "DDJK",
-            "transactionNum": next(transaction_number),
+            "transactionNum": transaction_num,
             "action": "remove", 
             "username": user_id,
             "funds": float(difference)
@@ -648,13 +631,13 @@ def set_buy_amount(user_id, stock_symbol, amount, cursor, conn):
         conn.commit()
     return
 
-def cancel_set_buy(user_id, stock_symbol, cursor, conn):
+def cancel_set_buy(transaction_num, user_id, stock_symbol, cursor, conn):
     
     command = UserCommand()
     attributes = {
         "timestamp": int(time.time() * 1000), 
         "server": "DDJK",
-        "transactionNum": next(transaction_number),
+        "transactionNum": transaction_num,
         "command": "CANCEL_SET_BUY",
         "username": user_id,
         "stockSymbol": stock_symbol
@@ -667,14 +650,13 @@ def cancel_set_buy(user_id, stock_symbol, cursor, conn):
                     'AND stock_symbol = %s                      ' 
                     'AND type = %s;                             '
                     ,(user_id, stock_symbol, 'buy'))
-    result = cursor.fetchall()
-    print("\n\n\n\n" + str(len(result)) + "\n\n\n\n")
-    if len(result) == 0:
+    result = cursor.fetchone()
+    if result is None:
         error = ErrorEvent()
         attributes = {
             "timestamp": int(time.time() * 1000), 
             "server": "DDJK",
-            "transactionNum": next(transaction_number),
+            "transactionNum": transaction_num,
             "command": "BUY",
             "username": user_id,
             "errorMessage": "SET_BUY does not exist, no action taken"
@@ -691,7 +673,7 @@ def cancel_set_buy(user_id, stock_symbol, cursor, conn):
                         'AND stock_symbol = %s  '
                         'AND type = %s;         '
                         ,(user_id, stock_symbol, 'buy'))
-        amount_to_refund = float(result[0][0])
+        amount_to_refund = float(result[0])
         print("refund size:", amount_to_refund)
         cursor.execute( 'UPDATE users SET balance = balance + %s    '
                         'WHERE username = %s                        '
@@ -702,7 +684,7 @@ def cancel_set_buy(user_id, stock_symbol, cursor, conn):
         attributes = {
             "timestamp": int(time.time() * 1000), 
             "server": "DDJK",
-            "transactionNum": next(transaction_number),
+            "transactionNum": transaction_num,
             "action": "add", 
             "username": user_id,
             "funds": float(amount_to_refund)
@@ -712,13 +694,13 @@ def cancel_set_buy(user_id, stock_symbol, cursor, conn):
 
     return 
 
-def set_buy_trigger(user_id, stock_symbol, amount, cursor, conn):
+def set_buy_trigger(transaction_num, user_id, stock_symbol, amount, cursor, conn):
     
     command = UserCommand()
     attributes = {
         "timestamp": int(time.time() * 1000), 
         "server": "DDJK",
-        "transactionNum": next(transaction_number),
+        "transactionNum": transaction_num,
         "command": "SET_BUY_TRIGGER",
         "username": user_id,
         "stockSymbol": stock_symbol,
@@ -739,7 +721,7 @@ def set_buy_trigger(user_id, stock_symbol, amount, cursor, conn):
         attributes = {
             "timestamp": int(time.time() * 1000), 
             "server": "DDJK",
-            "transactionNum": next(transaction_number),
+            "transactionNum": transaction_num,
             "command": "BUY",
             "username": user_id,
             "errorMessage": "SET_BUY does not exist, no action taken"
@@ -758,13 +740,13 @@ def set_buy_trigger(user_id, stock_symbol, amount, cursor, conn):
 
 #TODO: if set_sell of this stock already exists, account for that stock when
 #      determining whether user owns enough stock to create set_sell order
-def set_sell_amount(user_id, stock_symbol, amount, cursor, conn):
+def set_sell_amount(transaction_num, user_id, stock_symbol, amount, cursor, conn):
     
     command = UserCommand()
     attributes = {
         "timestamp": int(time.time() * 1000), 
         "server": "DDJK",
-        "transactionNum": next(transaction_number),
+        "transactionNum": transaction_num,
         "command": "SET_SELL_AMOUNT",
         "username": user_id,
         "stockSymbol": stock_symbol,
@@ -792,7 +774,7 @@ def set_sell_amount(user_id, stock_symbol, amount, cursor, conn):
         attributes = {
             "timestamp": int(time.time() * 1000), 
             "server": "DDJK",
-            "transactionNum": next(transaction_number),
+            "transactionNum": transaction_num,
             "command": "BUY",
             "username": user_id,
             "errorMessage": "User owns no shares of this type"
@@ -806,7 +788,7 @@ def set_sell_amount(user_id, stock_symbol, amount, cursor, conn):
         attributes = {
             "timestamp": int(time.time() * 1000), 
             "server": "DDJK",
-            "transactionNum": next(transaction_number),
+            "transactionNum": transaction_num,
             "command": "BUY",
             "username": user_id,
             "errorMessage": "User dooes not own enough shares of this type"
@@ -840,13 +822,13 @@ def set_sell_amount(user_id, stock_symbol, amount, cursor, conn):
         conn.commit()
     return
 
-def set_sell_trigger(user_id, stock_symbol, amount, cursor, conn):
+def set_sell_trigger(transaction_num, user_id, stock_symbol, amount, cursor, conn):
     
     command = UserCommand()
     attributes = {
         "timestamp": int(time.time() * 1000), 
         "server": "DDJK",
-        "transactionNum": next(transaction_number),
+        "transactionNum": transaction_num,
         "command": "SET_SELL_TRIGGER",
         "username": user_id,
         "stockSymbol": stock_symbol,
@@ -867,7 +849,7 @@ def set_sell_trigger(user_id, stock_symbol, amount, cursor, conn):
         attributes = {
             "timestamp": int(time.time() * 1000), 
             "server": "DDJK",
-            "transactionNum": next(transaction_number),
+            "transactionNum": transaction_num,
             "command": "BUY",
             "username": user_id,
             "errorMessage": "SET_SELL does not exist"
@@ -884,13 +866,13 @@ def set_sell_trigger(user_id, stock_symbol, amount, cursor, conn):
         conn.commit()
     return 
 
-def cancel_set_sell(user_id, stock_symbol, cursor, conn):
+def cancel_set_sell(transaction_num, user_id, stock_symbol, cursor, conn):
     
     command = UserCommand()
     attributes = {
         "timestamp": int(time.time() * 1000), 
         "server": "DDJK",
-        "transactionNum": next(transaction_number),
+        "transactionNum": transaction_num,
         "command": "CANCEL_SET_SELL",
         "username": user_id,
         "stockSymbol": stock_symbol
@@ -903,13 +885,12 @@ def cancel_set_sell(user_id, stock_symbol, cursor, conn):
                     'AND stock_symbol = %s;                '
                     ,(user_id, stock_symbol))
     result = cursor.fetchall()
-    print("\n\n\n\n" + str(len(result)) + "\n\n\n\n")
     if len(result) == 0:
         error = ErrorEvent()
         attributes = {
             "timestamp": int(time.time() * 1000), 
             "server": "DDJK",
-            "transactionNum": next(transaction_number),
+            "transactionNum": transaction_num,
             "command": "BUY",
             "username": user_id,
             "errorMessage": "Order does not exist"
@@ -947,7 +928,7 @@ def trigger_maintainer(cursor, conn):
         buy_or_sell = row[2]
         trigger_amount = row[3]
         transaction_amount = row[4]
-        current_price = quote(user_id, stock_symbol)[0]
+        current_price = quote(transaction_num, user_id, stock_symbol)[0]
         print("row details: user_id:", user_id, "stock_symbol:", stock_symbol, "buy_or_sell:", buy_or_sell, "trigger_amount:", trigger_amount, "transaction_amount:", transaction_amount, "current_price:", current_price)
         if buy_or_sell == 'buy' and current_price <= trigger_amount: # trigger the buy
             num_stocks_to_buy = int(transaction_amount/current_price)
@@ -983,7 +964,7 @@ def trigger_maintainer(cursor, conn):
             attributes = {
                 "timestamp": int(time.time() * 1000), 
                 "server": "DDJK",
-                "transactionNum": next(transaction_number),
+                "transactionNum": transaction_num,
                 "action": "add", 
                 "username": user_id,
                 "funds": float(leftover_cash)
@@ -1011,7 +992,7 @@ def trigger_maintainer(cursor, conn):
             attributes = {
                 "timestamp": int(time.time() * 1000), 
                 "server": "DDJK",
-                "transactionNum": next(transaction_number),
+                "transactionNum": transaction_num,
                 "action": "add", 
                 "username": user_id,
                 "funds": float(cash_from_sale)

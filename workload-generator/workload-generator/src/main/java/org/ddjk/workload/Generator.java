@@ -55,9 +55,7 @@ public class Generator {
                         break;
                     }
 
-                    // Strip off line number from start of command.
-                    final String stripped = line.split(" ")[1];
-                    lines.add(stripped);
+                    lines.add(line);
                 }
             }
         } catch (Throwable e){
@@ -108,6 +106,7 @@ public class Generator {
             final int statusCode = actual.getStatusCode();
             if (statusCode != 200) {
                 System.out.printf("Request returned status code %d.\n", statusCode);
+                System.exit(1);
             }
         }
 
