@@ -10,3 +10,9 @@ workload-generator/src/log
 .idea
 out/
 build/
+workload-generator/.classpath
+workload-generator/.project
+workload-generator/.settings/org.eclipse.buildship.core.prefs
+workload-generator/workload-generator/.classpath
+workload-generator/workload-generator/.project
+workload-generator/workload-generator/.settings/org.eclipse.buildship.core.prefs
