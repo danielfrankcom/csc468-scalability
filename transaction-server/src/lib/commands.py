@@ -77,22 +77,23 @@ def add(transaction_num, user_id, amount, cursor, conn):
 def get_quote(user_id, stock_symbol):
 
         # Create the socket
-        #s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
         # Connect the socket
-        #s.connect(('quoteserve.seng.uvic.ca', 4444))
+        s.connect(('quoteserve.seng.uvic.ca', 4444))
 
         # Send the user's query
-        #request = "{symbol},{user}\n".format(symbol=stock_symbol, user=user_id)
-        #s.send(request.encode())
+        request = "{symbol},{user}\n".format(symbol=stock_symbol, user=user_id)
+        s.send(request.encode())
 
         # Read and print up to 1k of data.
-        #data = s.recv(1024).decode().split("\n")[0]
+        data = s.recv(1024).decode().split("\n")[0]
 
         # close the connection, and the socket
-        #s.close()
+        s.close()
 
-        price, symbol, username, timestamp, cryptokey = "20.01,BAD,usernamehere,1549827515,crytoKEY=123=o".split(",")
+        # price, symbol, username, timestamp, cryptokey = "20.01,BAD,usernamehere,1549827515,crytoKEY=123=o".split(",")
+        price, symbol, username, timestamp, cryptokey = data.split(",")
         return float(price), int(timestamp), cryptokey        
 
 # quote() is called when a client requests a quote.  It will return a valid price for the
@@ -142,7 +143,13 @@ def buy_timeout(user_id, stock_symbol, dollar_amount, cursor, conn):
         'stock_symbol = %s AND                      '
         'amount = %s;                               ',
         ('buy', user_id, stock_symbol, dollar_amount))
-    result = cursor.fetchone()
+    
+    
+    try:
+        result = cursor.fetchone()
+    except:
+        return
+
     if result is None: #order has already been manually confirmed or cancelled
         print("Timer for order is up, but the order is already gone")
         return
@@ -181,65 +188,72 @@ def buy(transaction_num, user_id, stock_symbol, amount, cursor, conn):
     
     price, stock_symbol, user_id, time_of_quote, cryptokey = quote(transaction_num, user_id, stock_symbol)
 
-    for i in cursor.fetchall():
-        if i[0] == user_id:
-            # USER EXISTS
-            cursor.execute("SELECT balance FROM users WHERE username = %s", (user_id,))
-            conn.commit()
-            balance = cursor.fetchone()
-            if balance[0] >= float(amount):
-                # CAN AFFORD THE STOCK
-                cursor.execute("UPDATE users SET balance = balance - %s WHERE username = %s;", (float(amount), user_id))
+    try:
+        test = cursor.fetchall()
+    except:
+        return
+
+    if test != None:
+        for i in cursor.fetchall():
+            if i[0] == user_id:
+                # USER EXISTS
+                cursor.execute("SELECT balance FROM users WHERE username = %s", (user_id,))
                 conn.commit()
+                balance = cursor.fetchone()
+                if balance[0] >= float(amount):
+                    # CAN AFFORD THE STOCK
+                    cursor.execute("UPDATE users SET balance = balance - %s WHERE username = %s;", (float(amount), user_id))
+                    conn.commit()
 
-                transaction = AccountTransaction()
-                attributes = {
-                    "timestamp": int(time.time() * 1000), 
-                    "server": "DDJK",
-                    "transactionNum": transaction_num,
-                    "action": "remove", 
-                    "username": user_id,
-                    "funds": float(amount)
-                }
-                transaction.updateAll(**attributes)
-                XMLTree.append(transaction)
+                    transaction = AccountTransaction()
+                    attributes = {
+                        "timestamp": int(time.time() * 1000), 
+                        "server": "DDJK",
+                        "transactionNum": transaction_num,
+                        "action": "remove", 
+                        "username": user_id,
+                        "funds": float(amount)
+                    }
+                    transaction.updateAll(**attributes)
+                    XMLTree.append(transaction)
 
-                cursor.execute("INSERT INTO reserved (type, username, stock_symbol, stock_quantity, price, amount, timestamp) VALUES (%s, %s, %s, %s, %s, %s, %s);", ('buy', user_id, stock_symbol, int(float(amount)/price), price, amount, round(time.time(), 5),))
-                conn.commit() 
+                    cursor.execute("INSERT INTO reserved (type, username, stock_symbol, stock_quantity, price, amount, timestamp) VALUES (%s, %s, %s, %s, %s, %s, %s);", ('buy', user_id, stock_symbol, int(float(amount)/price), price, amount, round(time.time(), 5),))
+                    conn.commit() 
 
-                # create timer, when timer finishes have it cancel the buy
-                threading.Timer(QUOTE_LIFESPAN, buy_timeout, args=(user_id, stock_symbol, amount, cursor, conn)).start()
-            else:
+                    # create timer, when timer finishes have it cancel the buy
+                    threading.Timer(QUOTE_LIFESPAN, buy_timeout, args=(user_id, stock_symbol, amount, cursor, conn)).start()
+                else:
                 
-                error = ErrorEvent()
-                attributes = {
-                    "timestamp": int(time.time() * 1000), 
-                    "server": "DDJK",
-                    "transactionNum": transaction_num,
-                    "command": "BUY",
-                    "username": user_id,
-                    "stockSymbol": stock_symbol,
-                    "funds": float(amount),
-                    "errorMessage": "Insufficient Funds" 
-                }
-                error.updateAll(**attributes)
-                XMLTree.append(error)
-            return
-    # USER DOESN"T EXIST
-    error = ErrorEvent()
-    attributes = {
-        "timestamp": int(time.time() * 1000), 
-        "server": "DDJK",
-        "transactionNum": transaction_num,
-        "command": "BUY",
-        "username": user_id,
-        "stockSymbol": stock_symbol,
-        "funds": float(amount),
-        "errorMessage": "User does not exist" 
-    }
-    error.updateAll(**attributes)
-    XMLTree.append(error)
-    return
+                    error = ErrorEvent()
+                    attributes = {
+                        "timestamp": int(time.time() * 1000), 
+                        "server": "DDJK",
+                        "transactionNum": transaction_num,
+                        "command": "BUY",
+                        "username": user_id,
+                        "stockSymbol": stock_symbol,
+                        "funds": float(amount),
+                        "errorMessage": "Insufficient Funds" 
+                    }
+                    error.updateAll(**attributes)
+                    XMLTree.append(error)
+                    return
+    else:
+        # USER DOESN"T EXIST
+        error = ErrorEvent()
+        attributes = {
+            "timestamp": int(time.time() * 1000), 
+            "server": "DDJK",
+            "transactionNum": transaction_num,
+            "command": "BUY",
+            "username": user_id,
+            "stockSymbol": stock_symbol,
+            "funds": float(amount),
+            "errorMessage": "User does not exist" 
+        }
+        error.updateAll(**attributes)
+        XMLTree.append(error)
+        return
 
 def commit_buy(transaction_num, user_id, cursor, conn):
     cursor.execute('SELECT * FROM reserved WHERE type = %s AND username = %s AND timestamp > %s;', ('buy', user_id, round(time.time(), 5)-60))
@@ -276,12 +290,15 @@ def commit_buy(transaction_num, user_id, cursor, conn):
         cursor.execute('SELECT reservationid, stock_symbol, stock_quantity, amount, price FROM reserved WHERE type = %s AND username = %s AND timestamp = (SELECT MAX(timestamp) FROM reserved WHERE type = %s AND username = %s);', ('buy', user_id, 'buy', user_id))
         conn.commit()
 
-        elements = cursor.fetchone()
-        reservationid = elements[0]
-        stock_symbol = elements[1]
-        stock_quantity = elements[2]
-        amount = elements[3]
-        price = elements[4]
+        try:
+            elements = cursor.fetchone()
+            reservationid = elements[0]
+            stock_symbol = elements[1]
+            stock_quantity = elements[2]
+            amount = elements[3]
+            price = elements[4]
+        except:
+            return
         
         
         function =  "INSERT INTO stocks (username, stock_symbol, stock_quantity) " \
@@ -383,7 +400,12 @@ def sell(transaction_num, user_id, stock_symbol, amount, cursor, conn):
 
     price, stock_symbol, user_id, time_of_quote, cryptokey = quote(transaction_num, user_id, stock_symbol)
 
-    for i in cursor.fetchall():
+    try:
+        test = cursor.fetchall()
+    except:
+        return
+
+    for i in test:
         # USER EXISTS
         if i[0] == user_id:
             cursor.execute("SELECT stock_quantity FROM stocks WHERE username = %s AND stock_symbol = %s", (user_id, stock_symbol))
@@ -928,7 +950,8 @@ def trigger_maintainer(cursor, conn):
         buy_or_sell = row[2]
         trigger_amount = row[3]
         transaction_amount = row[4]
-        current_price = quote(transaction_num, user_id, stock_symbol)[0]
+        # CHANGE THIS BACK JAIME JAIME JAIME CHANGE THIS BACK
+        current_price = quote(1, user_id, stock_symbol)[0]
         print("row details: user_id:", user_id, "stock_symbol:", stock_symbol, "buy_or_sell:", buy_or_sell, "trigger_amount:", trigger_amount, "transaction_amount:", transaction_amount, "current_price:", current_price)
         if buy_or_sell == 'buy' and current_price <= trigger_amount: # trigger the buy
             num_stocks_to_buy = int(transaction_amount/current_price)
@@ -964,7 +987,7 @@ def trigger_maintainer(cursor, conn):
             attributes = {
                 "timestamp": int(time.time() * 1000), 
                 "server": "DDJK",
-                "transactionNum": transaction_num,
+                "transactionNum": 1,
                 "action": "add", 
                 "username": user_id,
                 "funds": float(leftover_cash)
@@ -1012,11 +1035,46 @@ def trigger_maintainer(cursor, conn):
     # even on the new thread.  This needs more looking into to be sure if it's optimal
     threading.Timer(QUOTE_LIFESPAN, trigger_maintainer, args=(cursor, conn)).start()
 
-def dumplog(filename):
+def dumplog(transaction_num, filename):
+    command = UserCommand()
+    attributes = {
+        "timestamp": int(time.time() * 1000), 
+        "server": "DDJK",
+        "transactionNum": transaction_num,
+        "command": "DUMPLOG"
+    }
+    command.updateAll(**attributes)
+    XMLTree.append(command)
+    
     XMLTree.write(filename)
 
-def dumplog_user(user_id, filename):
-    return 0
+def dumplog_user(transaction_num, user_id, filename):
+    command = UserCommand()
+    attributes = {
+        "timestamp": int(time.time() * 1000), 
+        "server": "DDJK",
+        "transactionNum": transaction_num,
+        "command": "DUMPLOG",
+        "username": user_id
+    }
+    command.updateAll(**attributes)
+    XMLTree.append(command)
+
+    XMLTree.writeFiltered(filename, user_id)
+
+
+def display_summary(transaction_num, user_id):
+    command = UserCommand()
+    attributes = {
+        "timestamp": int(time.time() * 1000), 
+        "server": "DDJK",
+        "transactionNum": transaction_num,
+        "command": "DISPLAY_SUMMARY",
+        "username": user_id
+    }
+    command.updateAll(**attributes)
+    XMLTree.append(command)
+
 
 def main():
     cursor, conn = initdb()

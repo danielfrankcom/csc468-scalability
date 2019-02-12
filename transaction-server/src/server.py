@@ -125,15 +125,27 @@ def parseCommand(raw):
         try:
             [location] = arguments
         except ValueError:
-            print("Invalid input. <SET_SELL_TRIGGER USER_ID STOCK_SYMBOL AMOUNT>")
+            try:
+                user_id, filename = arguments
+            except ValueError: 
+                print("Invalid Input. Functionality: <DUMPLOG FILENAME> or <DUMPLOG USERNAME>")
+            else:
+                filename = os.path.basename(location)
+                path = os.path.join("/out/", filename)
+                dumplog_user(transactionNum, user_id, path)
         else:
             filename = os.path.basename(location)
             path = os.path.join("/out/", filename)
-            dumplog(path)
-
+            dumplog(transactionNum, path)
+    elif command == "DISPLAY_SUMMARY":
+        try:
+            [user_id] = arguments
+        except ValueError:
+            print("Invalid input. <DISPLAY_SUMMARY USER_ID>")
+        else:
+            display_summary(transactionNum, user_id)
     else:
         print(arguments, " Invalid Command")
-
 
 app = Flask(__name__)
 cursor, conn = initdb()
