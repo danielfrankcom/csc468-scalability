@@ -1,7 +1,7 @@
 FROM alpine:3.8
 
-ENV http_proxy=http://192.168.1.1:3128/
-ENV https_proxy=http://192.168.1.1:3128/
+#ENV http_proxy=http://192.168.1.1:3128/
+#ENV https_proxy=http://192.168.1.1:3128/
 
 # Install required packages.
 RUN apk --update add py3-psycopg2

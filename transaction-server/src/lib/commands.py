@@ -71,10 +71,8 @@ def add(transaction_num, user_id, amount, cursor, conn):
     transaction.updateAll(**attributes)
     XMLTree.append(transaction)
 
-# get_quote() is used to directly acquire a quote from the quote server (eventually)
-# for now, this is a placeholder function, and returns a random value between
-# 1.0 and 10.0. 
-def get_quote(user_id, stock_symbol):
+# Contact the actual quote server
+def contact_server(query):
 
         # Create the socket
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -83,7 +81,6 @@ def get_quote(user_id, stock_symbol):
         s.connect(('quoteserve.seng.uvic.ca', 4444))
 
         # Send the user's query
-        request = "{symbol},{user}\n".format(symbol=stock_symbol, user=user_id)
         s.send(request.encode())
 
         # Read and print up to 1k of data.
@@ -92,7 +89,22 @@ def get_quote(user_id, stock_symbol):
         # close the connection, and the socket
         s.close()
 
-        # price, symbol, username, timestamp, cryptokey = "20.01,BAD,usernamehere,1549827515,crytoKEY=123=o".split(",")
+        return data
+
+# Contact a fake server
+def fake_server(query):
+        return "20.01,BAD,usernamehere,1549827515,crytoKEY=123=o"
+
+# get_quote() is used to directly acquire a quote from the quote server (eventually)
+# for now, this is a placeholder function, and returns a random value between
+# 1.0 and 10.0. 
+def get_quote(user_id, stock_symbol):
+
+        request = "{symbol},{user}\n".format(symbol=stock_symbol, user=user_id)
+
+        #data = contact_server(request)
+        data = fake_server(request)
+
         price, symbol, username, timestamp, cryptokey = data.split(",")
         return float(price), int(timestamp), cryptokey        
 
