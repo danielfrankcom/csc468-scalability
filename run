@@ -12,7 +12,7 @@ realpath() {
     [[ $1 = /* ]] && echo "$1" || echo "$PWD/${1#./}"
 }
 
-SCRIPT_PATH="/src/workload-generator.py"
+SCRIPT_PATH="/src/build/libs/http-workload-generator-1.0-SNAPSHOT.jar"
 RELATIVE_DIR=$(dirname "$0")
 ABSOLUTE_DIR=$(realpath "$RELATIVE_DIR")
 WORKLOADS_DIR="$ABSOLUTE_DIR/workloads"
@@ -37,4 +37,4 @@ echo "Generator running, press Ctrl+\\ to exit."
 sudo docker exec \
     -it \
     "$CONTAINER_NAME" \
-    python3 "$SCRIPT_PATH" "$WORKLOAD_PATH"
+java -jar "$SCRIPT_PATH" "$WORKLOAD_PATH"
