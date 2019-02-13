@@ -1,10 +1,9 @@
 FROM alpine:3.8
 
-# Install required packages.
-RUN apk --update add python3
-RUN apk add --no-cache bash
-RUN apk add nmap
-RUN pip3 install --upgrade pip
-RUN pip3 install requests
-RUN pip3 install tornado 
-RUN pip3 install aiohttp
+ENV http_proxy=http://192.168.1.1:3128/
+ENV https_proxy=http://192.168.1.1:3128/
+
+RUN apk --update add openjdk8
+
+WORKDIR /src
+CMD ["/src/entry"]
