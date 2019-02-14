@@ -1,12 +1,16 @@
-#include <ctime>
+#include <chrono>
 #include <iostream>
 #include <string>
+#include <unordered_map>
+#include <iomanip>
+#include <sstream>
 #include <boost/bind.hpp>
 #include <boost/shared_ptr.hpp>
 #include <boost/enable_shared_from_this.hpp>
 #include <boost/asio.hpp>
 
 using boost::asio::ip::tcp;
+using namespace std::chrono;
 
 static const int INCOMING_PORT = 6000;
 
@@ -61,19 +65,90 @@ public:
         return socket_;
     }
 
-    void start() {
+    void start(std::unordered_map<std::string, std::tuple<milliseconds, double, std::string>>& cache) {
         // Get incoming quote request.
         std::string request;
         read_request(request);
 
-        // Forward to quote server.
-        boost::asio::io_service svc;
-        client client(svc, OUTGOING_HOST, std::to_string(OUTGOING_PORT));
-        client.send(request);
+        // Get stock symbol from request
+        int delimiterPos = request.find(",");
+        std::string stockSymbol = request.substr(0, delimiterPos);
 
-        // Read quote server response.
+        // Look up the stock symbol for a quote.
         std::string response;
-        client.receive(response);
+        bool validCache = false;
+        if (cache.find(stockSymbol) != cache.end()) {
+
+            std::tuple<milliseconds, double, std::string> cachedValue = cache[stockSymbol];
+
+            // Get timestamps to compare for quote expiry.
+            milliseconds expiry = std::get<0>(cachedValue);
+            milliseconds current = duration_cast<milliseconds>(
+                    system_clock::now().time_since_epoch()
+            );
+
+            // Use the current quote if not expired.
+            if (expiry >= current) {
+
+                std::stringstream stream;
+
+                // Force 2 decimal places on quote.
+                double quote = std::get<1>(cachedValue);
+                stream << std::fixed << std::setprecision(2) << quote << ",";
+
+                stream << stockSymbol << ",";
+
+                // Pull username from request, since user who requested cached version may not be the same.
+                int usernameLength = response.length() - delimiterPos;
+                std::string username = request.substr(delimiterPos + 1, usernameLength);
+                stream << username << ",";
+
+                std::string cryptokey = std::get<2>(cachedValue);
+                stream << cryptokey;
+
+                response = stream.str();
+                validCache = true;
+
+                std::cout << "Serving quote '" << request << "' from cache." << std::endl;
+            }
+        }
+
+        // Grab a new quote if none is cached, or an expired quote is cached.
+        if (!validCache) {
+
+            // Forward to quote server.
+            boost::asio::io_service svc;
+            client client(svc, OUTGOING_HOST, std::to_string(OUTGOING_PORT));
+            client.send(request);
+
+            // Read quote server response.
+            client.receive(response);
+
+
+            // Grab the quote info for the cache.
+            int endOfQuote = response.find(",", 0);
+            double quote = std::stod(response.substr(0, endOfQuote));
+
+            // Ignore these as we already have info
+            int endOfStockSymbol = response.find(",", endOfQuote + 1);
+            int endOfUsername = response.find(",", endOfStockSymbol + 1);
+
+            int endOfCryptokey = response.length() - 1;
+            std::string cryptokey = response.substr(endOfUsername + 1, endOfCryptokey - endOfUsername);
+
+
+            // Set expiry time for cached value.
+            milliseconds current = duration_cast<milliseconds>(
+                    system_clock::now().time_since_epoch()
+            );
+            milliseconds expiry = current + minutes(1);
+
+            // Store the quote in the cache for later use.
+            std::tuple<milliseconds, double, std::string> value(expiry, quote, cryptokey);
+            cache[stockSymbol] = value;
+
+            std::cout << "No cache found for '" << request << "', contacting server." << std::endl;
+        }
 
         // Send quote server response to client.
         boost::asio::async_write(socket_, boost::asio::buffer(response),
@@ -128,12 +203,15 @@ private:
     void handle_accept(tcp_connection::pointer new_connection,
                        const boost::system::error_code &error) {
         if (!error) {
-            new_connection->start();
+            new_connection->start(cache_);
             start_accept();
         }
     }
 
     tcp::acceptor acceptor_;
+
+    // <expiry time, quote price, cryptokey>
+    std::unordered_map<std::string, std::tuple<milliseconds, double, std::string>> cache_;
 };
 
 int main() {
