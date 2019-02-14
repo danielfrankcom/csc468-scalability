@@ -10,3 +10,6 @@ workload-generator/src/log
 .idea
 out/
 build/
+
+# cmake files
+cmake-build-debug
