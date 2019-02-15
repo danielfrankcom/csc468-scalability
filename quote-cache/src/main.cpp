@@ -14,7 +14,7 @@ using namespace std::chrono;
 
 static const int INCOMING_PORT = 6000;
 
-static const std::string OUTGOING_HOST = "localhost";
+static const std::string OUTGOING_HOST = "quoteserve.seng.uvic.ca";
 static const int OUTGOING_PORT = 4444;
 
 class client {
@@ -65,7 +65,7 @@ public:
         return socket_;
     }
 
-    void start(std::unordered_map<std::string, std::tuple<milliseconds, double, std::string>>& cache) {
+    void start(std::unordered_map<std::string, std::tuple<milliseconds, std::string, double, std::string>>& cache) {
         // Get incoming quote request.
         std::string request;
         read_request(request);
@@ -79,7 +79,7 @@ public:
         bool validCache = false;
         if (cache.find(stockSymbol) != cache.end()) {
 
-            std::tuple<milliseconds, double, std::string> cachedValue = cache[stockSymbol];
+            std::tuple<milliseconds, std::string, double, std::string> cachedValue = cache[stockSymbol];
 
             // Get timestamps to compare for quote expiry.
             milliseconds expiry = std::get<0>(cachedValue);
@@ -93,7 +93,7 @@ public:
                 std::stringstream stream;
 
                 // Force 2 decimal places on quote.
-                double quote = std::get<1>(cachedValue);
+                double quote = std::get<2>(cachedValue);
                 stream << std::fixed << std::setprecision(2) << quote << ",";
 
                 stream << stockSymbol << ",";
@@ -103,7 +103,11 @@ public:
                 std::string username = request.substr(delimiterPos + 1, usernameLength);
                 stream << username << ",";
 
-                std::string cryptokey = std::get<2>(cachedValue);
+                // Place the cached server time into the response.
+                std::string timestamp = std::get<1>(cachedValue);
+                stream << timestamp << ",";
+
+                std::string cryptokey = std::get<3>(cachedValue);
                 stream << cryptokey;
 
                 response = stream.str();
@@ -127,14 +131,20 @@ public:
 
             // Grab the quote info for the cache.
             int endOfQuote = response.find(",", 0);
+            std::cout << response << std::endl;
             double quote = std::stod(response.substr(0, endOfQuote));
+            std::cout << quote << std::endl;
 
             // Ignore these as we already have info
             int endOfStockSymbol = response.find(",", endOfQuote + 1);
             int endOfUsername = response.find(",", endOfStockSymbol + 1);
 
+            int endOfTimestamp = response.find(",", endOfUsername + 1);
+            int startOfTimestamp = endOfUsername + 1;
+            std::string timestamp = response.substr(startOfTimestamp, endOfTimestamp - startOfTimestamp);
+
             int endOfCryptokey = response.length() - 1;
-            std::string cryptokey = response.substr(endOfUsername + 1, endOfCryptokey - endOfUsername);
+            std::string cryptokey = response.substr(endOfTimestamp + 1, endOfCryptokey - endOfTimestamp);
 
 
             // Set expiry time for cached value.
@@ -144,7 +154,7 @@ public:
             milliseconds expiry = current + minutes(1);
 
             // Store the quote in the cache for later use.
-            std::tuple<milliseconds, double, std::string> value(expiry, quote, cryptokey);
+            std::tuple<milliseconds, std::string, double, std::string> value(expiry, timestamp, quote, cryptokey);
             cache[stockSymbol] = value;
 
             std::cout << "No cache found for '" << request << "', contacting server." << std::endl;
@@ -210,8 +220,8 @@ private:
 
     tcp::acceptor acceptor_;
 
-    // <expiry time, quote price, cryptokey>
-    std::unordered_map<std::string, std::tuple<milliseconds, double, std::string>> cache_;
+    // <expiry time, server time, quote price, cryptokey>
+    std::unordered_map<std::string, std::tuple<milliseconds, std::string, double, std::string>> cache_;
 };
 
 int main() {

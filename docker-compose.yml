@@ -22,19 +22,24 @@ services:
             - ADMINER_USERNAME=${DB_USER}
             - ADMINER_PASSWORD=${DB_PASS}
             - ADMINER_AUTOLOGIN=1
+    quote-cache:
+        build: quote-cache
+        restart: always
+        ports:
+            - 4444:4444
     transaction-server:
         build: transaction-server
         depends_on:
             - postgres
+            - quote-cache
         restart: unless-stopped
         ports:
             - ${TRANSACTION_PORT}:5000
-            - 4444:4444
         volumes:
             - ./transaction-server/src:/src:ro
             - ./transaction-server/out:/out:rw
         environment:
-            - PYTHONUNBEFFERED=TRUE
+            - PYTHONUNBUFFERED=TRUE
     workload-generator:
         build: workload-generator
         restart: on-failure

@@ -78,10 +78,11 @@ def contact_server(query):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
         # Connect the socket
-        s.connect(('quoteserve.seng.uvic.ca', 4444))
+        #s.connect(('quoteserve.seng.uvic.ca', 4444))
+        s.connect(('quote-cache', 6000))
 
         # Send the user's query
-        s.send(request.encode())
+        s.send(query.encode())
 
         # Read and print up to 1k of data.
         data = s.recv(1024).decode().split("\n")[0]
@@ -102,8 +103,8 @@ def get_quote(user_id, stock_symbol):
 
         request = "{symbol},{user}\n".format(symbol=stock_symbol, user=user_id)
 
-        #data = contact_server(request)
-        data = fake_server(request)
+        data = contact_server(request)
+        #data = fake_server(request)
 
         price, symbol, username, timestamp, cryptokey = data.split(",")
         return float(price), int(timestamp), cryptokey        
