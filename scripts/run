@@ -1,0 +1,30 @@
+#! /bin/bash
+
+# Exit early if invalid arguments provided.
+if [[ $# -ne 1 ]]
+then
+    echo "Exactly 1 argument expected: workload filepath."
+    exit 1
+fi
+
+# Set up absolute paths for access.
+RELATIVE_DIR=$(dirname "$0")
+source "$RELATIVE_DIR/setup"
+
+CONTAINER_NAME="workload-generator"
+SCRIPT_PATH="/src/build/libs/http-workload-generator-1.0-SNAPSHOT.jar"
+WORKLOADS_DIR="$ROOT_DIR/workloads"
+
+# This assumes there is no file extension on the workload file.
+WORKLOAD_NAME=$(basename -- "$1")
+WORKLOAD_PATH="/workloads/$WORKLOAD_NAME"
+
+echo "Generator running, press Ctrl+C to exit."
+
+sudo -E docker-compose \
+    -f $YML_PATH \
+    exec \
+    $CONTAINER_NAME \
+    java \
+        -jar "$SCRIPT_PATH" \
+        "$WORKLOAD_PATH"

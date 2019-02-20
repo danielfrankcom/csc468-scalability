@@ -1,0 +1,17 @@
+#! /bin/bash
+
+# Exit early if invalid arguments provided.
+if [[ $# -ne 0 ]]
+then
+    echo "No arguments expected."
+    exit 1
+fi
+
+# Set up absolute paths for access.
+RELATIVE_DIR=$(dirname "$0")
+source "$RELATIVE_DIR/setup"
+
+# Stop all containers.
+sudo -E docker-compose \
+    -f $YML_PATH \
+    down

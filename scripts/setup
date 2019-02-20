@@ -1,0 +1,26 @@
+#! /bin/bash
+
+# Exit early on error.
+set -e
+
+# For macOS compatibility.
+realpath() {
+    filename=$1
+    parentdir=$(dirname "${filename}")
+
+    if [ -d "${filename}" ]; then
+        echo "$(cd "${filename}" && pwd)"
+    elif [ -d "${parentdir}" ]; then
+        echo "$(cd "${parentdir}" && pwd)/$(basename "${filename}")"
+    fi
+}
+
+RELATIVE_DIR=$(dirname "$0")
+ABSOLUTE_DIR=$(realpath "$RELATIVE_DIR")
+ROOT_DIR=$(dirname "$ABSOLUTE_DIR")
+
+YML_PATH="$ROOT_DIR/docker-compose.yml"
+
+# Pull environment variables into shell.
+ENV_PATH="$ROOT_DIR/.env"
+export $(cat $ENV_PATH | xargs)

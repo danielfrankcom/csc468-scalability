@@ -1,0 +1,26 @@
+#! /bin/bash
+
+# Exit early if invalid arguments provided.
+if [[ $# -ne 0 ]]
+then
+    echo "No arguments expected."
+    exit 1
+fi
+
+# Set up absolute paths for access.
+RELATIVE_DIR=$(dirname "$0")
+source "$RELATIVE_DIR/setup"
+
+# Build any image changes.
+sudo -E docker-compose \
+	-f $YML_PATH \
+	build \
+	--build-arg HTTP_PROXY=$http_proxy \
+	--build-arg HTTPS_PROXY=$https_proxy
+
+# Restart the containers.
+sudo -E docker-compose \
+	-f $YML_PATH \
+	up \
+	-d \
+	--force-recreate 

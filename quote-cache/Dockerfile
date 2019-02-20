@@ -1,8 +1,8 @@
 FROM alpine:3.8
 
-# Use these variables in the lab environment
-#ENV http_proxy=http://192.168.1.1:3128/
-#ENV https_proxy=http://192.168.1.1:3128/
+# Grab proxy settings to allow internet access.
+ENV http_proxy=$HTTP_PROXY
+ENV https_proxy=$HTTPS_PROXY
 
 # Install dependencies.
 RUN apk --update add build-base g++ cmake
