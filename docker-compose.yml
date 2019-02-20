@@ -46,8 +46,9 @@ services:
         depends_on:
             - transaction-server
         volumes:
-            - ./workload-generator/:/src:rw
             - ./workloads:/workloads:ro
+        stdin_open: true
+        tty: true
     webserver:
         image: nginx:1.14
         restart: on-failure

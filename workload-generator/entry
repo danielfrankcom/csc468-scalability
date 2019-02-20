@@ -1,5 +1,0 @@
-#! /bin/sh
-
-#-Dhttp.proxyHost=192.168.1.1 -Dhttp.proxyPort=3128 
-/src/gradlew build
-tail -F /nonexistent
