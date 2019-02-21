@@ -285,62 +285,65 @@ def commit_buy(transaction_num, user_id, cursor, conn):
     
     
     # NO BUY TO COMMIT
-    if cursor.fetchall() == []:
-        error = ErrorEvent()
-        attributes = {
-            "timestamp": int(time.time() * 1000), 
-            "server": "DDJK",
-            "transactionNum": transaction_num,
-            "command": "BUY",
-            "username": user_id,
-            "errorMessage": "No BUY to commit" 
-        }
-        error.updateAll(**attributes)
-        XMLTree.append(error)
-    # BUY TO COMMIT
-    else:
-    
-        cursor.execute('SELECT reservationid, stock_symbol, stock_quantity, amount, price FROM reserved WHERE type = %s AND username = %s AND timestamp = (SELECT MAX(timestamp) FROM reserved WHERE type = %s AND username = %s);', ('buy', user_id, 'buy', user_id))
-        conn.commit()
+    try:
+        if cursor.fetchall() == []:
+            error = ErrorEvent()
+            attributes = {
+                "timestamp": int(time.time() * 1000), 
+                "server": "DDJK",
+                "transactionNum": transaction_num,
+                "command": "BUY",
+                "username": user_id,
+                "errorMessage": "No BUY to commit" 
+            }
+            error.updateAll(**attributes)
+            XMLTree.append(error)
+        # BUY TO COMMIT
+        else:
+        
+            cursor.execute('SELECT reservationid, stock_symbol, stock_quantity, amount, price FROM reserved WHERE type = %s AND username = %s AND timestamp = (SELECT MAX(timestamp) FROM reserved WHERE type = %s AND username = %s);', ('buy', user_id, 'buy', user_id))
+            conn.commit()
 
-        try:
-            elements = cursor.fetchone()
-            reservationid = elements[0]
-            stock_symbol = elements[1]
-            stock_quantity = elements[2]
-            amount = elements[3]
-            price = elements[4]
-        except:
-            return
-        
-        
-        function =  "INSERT INTO stocks (username, stock_symbol, stock_quantity) " \
-                    "VALUES ('{username}', '{symbol}', {quantity}) " \
-                    "ON CONFLICT (username, stock_symbol) DO UPDATE " \
-                    "SET stock_quantity = (stocks.stock_quantity + {quantity}) " \
-                    "WHERE stocks.username = '{username}' and stocks.stock_symbol = '{symbol}';".format(username=user_id, symbol=stock_symbol, quantity=stock_quantity)
-        
-        cursor.execute(function, (user_id, amount))
-        
-        cursor.execute('UPDATE users SET balance = balance + %s WHERE username = %s', (amount-(price*stock_quantity), user_id))    
-        conn.commit
-        
+            try:
+                elements = cursor.fetchone()
+                reservationid = elements[0]
+                stock_symbol = elements[1]
+                stock_quantity = elements[2]
+                amount = elements[3]
+                price = elements[4]
+            except:
+                return
+            
+            
+            function =  "INSERT INTO stocks (username, stock_symbol, stock_quantity) " \
+                        "VALUES ('{username}', '{symbol}', {quantity}) " \
+                        "ON CONFLICT (username, stock_symbol) DO UPDATE " \
+                        "SET stock_quantity = (stocks.stock_quantity + {quantity}) " \
+                        "WHERE stocks.username = '{username}' and stocks.stock_symbol = '{symbol}';".format(username=user_id, symbol=stock_symbol, quantity=stock_quantity)
+            
+            cursor.execute(function, (user_id, amount))
+            
+            cursor.execute('UPDATE users SET balance = balance + %s WHERE username = %s', (amount-(price*stock_quantity), user_id))    
+            conn.commit
+            
 
-        transaction = AccountTransaction()
-        attributes = {
-            "timestamp": int(time.time() * 1000), 
-            "server": "DDJK",
-            "transactionNum": transaction_num,
-            "action": "add", 
-            "username": user_id,
-            "funds": float(amount-(price*stock_quantity))
-        }
-        transaction.updateAll(**attributes)
-        XMLTree.append(transaction)
+            transaction = AccountTransaction()
+            attributes = {
+                "timestamp": int(time.time() * 1000), 
+                "server": "DDJK",
+                "transactionNum": transaction_num,
+                "action": "add", 
+                "username": user_id,
+                "funds": float(amount-(price*stock_quantity))
+            }
+            transaction.updateAll(**attributes)
+            XMLTree.append(transaction)
 
-        cursor.execute('DELETE FROM reserved WHERE reservationid = %s', (reservationid,))    
-        conn.commit()        
-    return
+            cursor.execute('DELETE FROM reserved WHERE reservationid = %s', (reservationid,))    
+            conn.commit()        
+        return
+    except:
+        pass
 
 def cancel_buy(transaction_num, user_id, cursor, conn):
     cursor.execute('SELECT reservationid, amount FROM reserved WHERE type = %s AND username = %s AND timestamp = (SELECT MAX(timestamp) FROM reserved WHERE type = %s AND username = %s);', ('buy', user_id, 'buy', user_id))

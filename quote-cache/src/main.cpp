@@ -34,6 +34,7 @@ public:
     void receive(std::string &response) {
         std::array<char, 128> buffer;
         boost::system::error_code error;
+
         size_t len = socket_.read_some(boost::asio::buffer(buffer), error);
         if (error == boost::asio::error::eof) {
             std::cout << "An error occurred while reading from a socket." << std::endl;
@@ -123,17 +124,14 @@ public:
             // Forward to quote server.
             boost::asio::io_service svc;
             client client(svc, OUTGOING_HOST, std::to_string(OUTGOING_PORT));
-            client.send(request);
+            client.send(request + "\n");
 
             // Read quote server response.
             client.receive(response);
 
-
             // Grab the quote info for the cache.
             int endOfQuote = response.find(",", 0);
-            std::cout << response << std::endl;
             double quote = std::stod(response.substr(0, endOfQuote));
-            std::cout << quote << std::endl;
 
             // Ignore these as we already have info
             int endOfStockSymbol = response.find(",", endOfQuote + 1);
