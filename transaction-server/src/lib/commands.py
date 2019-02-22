@@ -107,7 +107,7 @@ def get_quote(user_id, stock_symbol):
         #data = fake_server(request)
 
         price, symbol, username, timestamp, cryptokey = data.split(",")
-        return float(price), int(timestamp), cryptokey        
+        return float(price), int(timestamp), cryptokey, username
 
 # quote() is called when a client requests a quote.  It will return a valid price for the
 # stock as requested, but this value will either come from cached_quotes or from q hit
@@ -116,7 +116,7 @@ def get_quote(user_id, stock_symbol):
 def quote(transaction_num, user_id, stock_symbol):
     # if not stock_symbol in cached_quotes.keys() or ((time.time() - cached_quotes[stock_symbol][1]) > QUOTE_LIFESPAN):
     # get quote from server
-    new_price, time_of_quote, cryptokey = get_quote(user_id, stock_symbol)
+    new_price, time_of_quote, cryptokey, quote_user = get_quote(user_id, stock_symbol)
 
     quote = QuoteServer()
     attributes = {
@@ -124,7 +124,7 @@ def quote(transaction_num, user_id, stock_symbol):
         "server": "DDJK",
         "transactionNum": transaction_num,
         "price": new_price, 
-        "username": user_id,
+        "username": quote_user,
         "stockSymbol": stock_symbol,
         "quoteServerTime": time_of_quote,
         "cryptokey": cryptokey
