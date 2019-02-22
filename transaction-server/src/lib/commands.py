@@ -36,9 +36,6 @@ def closedb(cursor):
     cursor.close()
 
 def add(transaction_num, user_id, amount, cursor, conn):
-    cursor.execute('SELECT username FROM users;')
-    conn.commit()
-
     command = UserCommand()
     attributes = {
         "timestamp": int(time.time() * 1000), 
