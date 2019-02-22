@@ -53,7 +53,7 @@ def add(transaction_num, user_id, amount, cursor, conn):
                 "SET balance = (users.balance + {amount}) " \
                 "WHERE users.username = '{username}';".format(username=user_id, amount=amount)
     
-    cursor.execute(function, (user_id, amount))
+    cursor.execute(function)
     conn.commit()
         
     transaction = AccountTransaction()
@@ -180,8 +180,6 @@ def buy_timeout(user_id, stock_symbol, dollar_amount, cursor, conn):
             user_id, stock_symbol, dollar_amount)
 
 def buy(transaction_num, user_id, stock_symbol, amount, cursor, conn):
-    cursor.execute('SELECT username FROM users;')
-    conn.commit()
     
     command = UserCommand()
     attributes = {
@@ -198,58 +196,24 @@ def buy(transaction_num, user_id, stock_symbol, amount, cursor, conn):
     
     price, stock_symbol, user_id, time_of_quote, cryptokey = quote(transaction_num, user_id, stock_symbol)
 
+
+    balance_update =    "UPDATE users" \
+                        "SET balance = balance - {amount}" \
+                        "WHERE username = {username}" \
+                        "AND balance >= {amount}".format(username=user_id, amount=amount)
+
+    reserved_update =   "INSERT INTO reserved" \
+                        "(type, username, stock_symbol, stock_quantity, price, amount, timestamp)" \
+                        "VALUES" \
+                        "({command}, {username}, {stock_symbol}, {stock_quantity}, {price}, {amount}, {timestamp})".format(command='buy', username=user_id, stock_symbol=stock_symbol, stock_quantity=int(float(amount)/price), price=price, amount=amount, timestamp=round(time.time()))
+
+
     try:
-        test = cursor.fetchall()
+        cursor.execute(balance_update)
+        cursor.execute(reserved_update)
+        conn.commit()
     except:
-        return
-
-    if test != None:
-        for i in cursor.fetchall():
-            if i[0] == user_id:
-                # USER EXISTS
-                cursor.execute("SELECT balance FROM users WHERE username = %s", (user_id,))
-                conn.commit()
-                balance = cursor.fetchone()
-                if balance[0] >= float(amount):
-                    # CAN AFFORD THE STOCK
-                    cursor.execute("UPDATE users SET balance = balance - %s WHERE username = %s;", (float(amount), user_id))
-                    conn.commit()
-
-                    transaction = AccountTransaction()
-                    attributes = {
-                        "timestamp": int(time.time() * 1000), 
-                        "server": "DDJK",
-                        "transactionNum": transaction_num,
-                        "action": "remove", 
-                        "username": user_id,
-                        "funds": float(amount)
-                    }
-                    transaction.updateAll(**attributes)
-                    XMLTree.append(transaction)
-
-                    cursor.execute("INSERT INTO reserved (type, username, stock_symbol, stock_quantity, price, amount, timestamp) VALUES (%s, %s, %s, %s, %s, %s, %s);", ('buy', user_id, stock_symbol, int(float(amount)/price), price, amount, round(time.time(), 5),))
-                    conn.commit() 
-
-                    # create timer, when timer finishes have it cancel the buy
-                    threading.Timer(QUOTE_LIFESPAN, buy_timeout, args=(user_id, stock_symbol, amount, cursor, conn)).start()
-                else:
-                
-                    error = ErrorEvent()
-                    attributes = {
-                        "timestamp": int(time.time() * 1000), 
-                        "server": "DDJK",
-                        "transactionNum": transaction_num,
-                        "command": "BUY",
-                        "username": user_id,
-                        "stockSymbol": stock_symbol,
-                        "funds": float(amount),
-                        "errorMessage": "Insufficient Funds" 
-                    }
-                    error.updateAll(**attributes)
-                    XMLTree.append(error)
-                    return
-    else:
-        # USER DOESN"T EXIST
+        conn.rollback()
         error = ErrorEvent()
         attributes = {
             "timestamp": int(time.time() * 1000), 
@@ -259,11 +223,27 @@ def buy(transaction_num, user_id, stock_symbol, amount, cursor, conn):
             "username": user_id,
             "stockSymbol": stock_symbol,
             "funds": float(amount),
-            "errorMessage": "User does not exist" 
+            "errorMessage": "Insufficient Funds" 
         }
         error.updateAll(**attributes)
         XMLTree.append(error)
         return
+
+
+    transaction = AccountTransaction()
+    attributes = {
+        "timestamp": int(time.time() * 1000), 
+        "server": "DDJK",
+        "transactionNum": transaction_num,
+        "action": "remove", 
+        "username": user_id,
+        "funds": float(amount)
+    }
+    transaction.updateAll(**attributes)
+    XMLTree.append(transaction)
+
+    threading.Timer(QUOTE_LIFESPAN, buy_timeout, args=(user_id, stock_symbol, amount, cursor, conn)).start()
+
 
 def commit_buy(transaction_num, user_id, cursor, conn):
     cursor.execute('SELECT * FROM reserved WHERE type = %s AND username = %s AND timestamp > %s;', ('buy', user_id, round(time.time(), 5)-60))
@@ -491,56 +471,59 @@ def commit_sell(transaction_num, user_id, cursor, conn):
     XMLTree.append(command)
 
     # NO SELL TO COMMIT
-    if cursor.fetchall() == []:
-        error = ErrorEvent()
-        attributes = {
-            "timestamp": int(time.time() * 1000), 
-            "server": "DDJK",
-            "transactionNum": transaction_num,
-            "command": "BUY",
-            "username": user_id,
-            "errorMessage": "No SELL to commit" 
-        }
-        error.updateAll(**attributes)
-        XMLTree.append(error)
-    # SELL TO COMMIT
-    else:
-        cursor.execute( 'SELECT reservationid, stock_symbol, stock_quantity, amount, price      '
-                        'FROM reserved                                                          '
-                        'WHERE type = %s                                                        '
-                        'AND username = %s                                                      '
-                        'AND timestamp = (SELECT MAX(timestamp)                                 '
-                        '                 FROM reserved                                         '
-                        '                 WHERE type = %s                                       '
-                        '                 AND username = %s);                                   '
-                        , ('sell', user_id, 'sell', user_id))
-        conn.commit()
+    try:
+        if cursor.fetchall() == []:
+            error = ErrorEvent()
+            attributes = {
+                "timestamp": int(time.time() * 1000), 
+                "server": "DDJK",
+                "transactionNum": transaction_num,
+                "command": "BUY",
+                "username": user_id,
+                "errorMessage": "No SELL to commit" 
+            }
+            error.updateAll(**attributes)
+            XMLTree.append(error)
+        # SELL TO COMMIT
+        else:
+            cursor.execute( 'SELECT reservationid, stock_symbol, stock_quantity, amount, price      '
+                            'FROM reserved                                                          '
+                            'WHERE type = %s                                                        '
+                            'AND username = %s                                                      '
+                            'AND timestamp = (SELECT MAX(timestamp)                                 '
+                            '                 FROM reserved                                         '
+                            '                 WHERE type = %s                                       '
+                            '                 AND username = %s);                                   '
+                            , ('sell', user_id, 'sell', user_id))
+            conn.commit()
 
-        elements = cursor.fetchone()
-        reservationid = elements[0]
-        stock_symbol = elements[1]
-        stock_quantity = elements[2]
-        amount = elements[3]
-        price = elements[4]
+            elements = cursor.fetchone()
+            reservationid = elements[0]
+            stock_symbol = elements[1]
+            stock_quantity = elements[2]
+            amount = elements[3]
+            price = elements[4]
 
-        cursor.execute('UPDATE users SET balance = balance + %s where username = %s', (stock_quantity*price, user_id))
-        conn.commit()
+            cursor.execute('UPDATE users SET balance = balance + %s where username = %s', (stock_quantity*price, user_id))
+            conn.commit()
 
-        transaction = AccountTransaction()
-        attributes = {
-            "timestamp": int(time.time() * 1000), 
-            "server": "DDJK",
-            "transactionNum": transaction_num,
-            "action": "add", 
-            "username": user_id,
-            "funds": float(stock_quantity*price)
-        }
-        transaction.updateAll(**attributes)
-        XMLTree.append(transaction)
+            transaction = AccountTransaction()
+            attributes = {
+                "timestamp": int(time.time() * 1000), 
+                "server": "DDJK",
+                "transactionNum": transaction_num,
+                "action": "add", 
+                "username": user_id,
+                "funds": float(stock_quantity*price)
+            }
+            transaction.updateAll(**attributes)
+            XMLTree.append(transaction)
 
-        cursor.execute('DELETE FROM reserved WHERE reservationid = %s', (reservationid,))    
-        conn.commit()        
-    return
+            cursor.execute('DELETE FROM reserved WHERE reservationid = %s', (reservationid,))    
+            conn.commit()        
+        return
+    except:
+        pass
 
 def cancel_sell(transaction_num, user_id, cursor, conn):
     cursor.execute('SELECT reservationid, stock_symbol, stock_quantity FROM reserved WHERE type = %s AND username = %s AND timestamp = (SELECT MAX(timestamp) FROM reserved WHERE type = %s AND username = %s);', ('sell', user_id, 'sell', user_id))
