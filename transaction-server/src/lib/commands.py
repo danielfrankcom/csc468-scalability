@@ -75,8 +75,8 @@ def contact_server(query):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
         # Connect the socket
-        #s.connect(('quoteserve.seng.uvic.ca', 4444))
-        s.connect(('quote-cache', 6000))
+        s.connect(('quoteserve.seng.uvic.ca', 4444))
+        #s.connect(('quote-cache', 6000))
 
         # Send the user's query
         s.send(query.encode())
@@ -100,8 +100,8 @@ def get_quote(user_id, stock_symbol):
 
         request = "{symbol},{user}\n".format(symbol=stock_symbol, user=user_id)
 
-        data = contact_server(request)
-        #data = fake_server(request)
+        #data = contact_server(request)
+        data = fake_server(request)
 
         price, symbol, username, timestamp, cryptokey = data.split(",")
         return float(price), int(timestamp), cryptokey, username
@@ -195,24 +195,32 @@ def buy(transaction_num, user_id, stock_symbol, amount, cursor, conn):
     XMLTree.append(command)
     
     price, stock_symbol, user_id, time_of_quote, cryptokey = quote(transaction_num, user_id, stock_symbol)
+    # Debugging print - feel free to delete this (Dusty)
+    print("in BUY.  List of data from quote:", 
+        "Price:", price,
+        "stock_symbol:", stock_symbol,
+        "user_id:", user_id,
+        "time_of_quote:", time_of_quote,
+        "cryptokey:", cryptokey)
 
+    balance_update =    "UPDATE users " \
+                        "SET balance = balance - '{amount}' " \
+                        "WHERE username = '{username}' " \
+                        "AND balance >= {amount};".format(username=user_id, amount=amount)
 
-    balance_update =    "UPDATE users" \
-                        "SET balance = balance - {amount}" \
-                        "WHERE username = {username}" \
-                        "AND balance >= {amount}".format(username=user_id, amount=amount)
+    reserved_update =   "INSERT INTO reserved " \
+                        "(type, username, stock_symbol, stock_quantity, price, amount, timestamp) " \
+                        "VALUES " \
+                        "('{command}', '{username}', '{stock_symbol}', {stock_quantity}, {price}, {amount}, {timestamp});".format(command='buy', username=user_id, stock_symbol=stock_symbol, stock_quantity=int(float(amount)/price), price=price, amount=amount, timestamp=round(time.time()))
 
-    reserved_update =   "INSERT INTO reserved" \
-                        "(type, username, stock_symbol, stock_quantity, price, amount, timestamp)" \
-                        "VALUES" \
-                        "({command}, {username}, {stock_symbol}, {stock_quantity}, {price}, {amount}, {timestamp})".format(command='buy', username=user_id, stock_symbol=stock_symbol, stock_quantity=int(float(amount)/price), price=price, amount=amount, timestamp=round(time.time()))
-
-
+    cursor.execute("BEGIN")
     try:
+        print("in try block of BUY:", balance_update)
         cursor.execute(balance_update)
         cursor.execute(reserved_update)
         conn.commit()
-    except:
+    except Exception as e:
+        print("in except block of BUY:", e)
         conn.rollback()
         error = ErrorEvent()
         attributes = {
@@ -337,7 +345,17 @@ def cancel_buy(transaction_num, user_id, cursor, conn):
     command.updateAll(**attributes)
     XMLTree.append(command)
 
-    elements = cursor.fetchone()
+    # NOTE: Below is a bandaid, try/except block wrapped around the fetchone() command
+    # TODO: implement proper logic, an error is logged or a succesful cance_buy is logged
+    #       (as well as a transaction logged, depositing the funds back into user account)
+    #   - Dusty
+
+    elements = None
+    try:
+        elements = cursor.fetchone()
+    except:
+        return
+
     if elements is None:
         error = ErrorEvent()
         attributes = {
@@ -353,6 +371,7 @@ def cancel_buy(transaction_num, user_id, cursor, conn):
         
         return
 
+    # if it runs this far, there must be something there
     reservationid = elements[0]
     amount = elements[1]
     cursor.execute('UPDATE users SET balance = balance + %s where username = %s', (amount, user_id))
@@ -582,14 +601,13 @@ def set_buy_amount(transaction_num, user_id, stock_symbol, amount, cursor, conn)
     command.updateAll(**attributes)
     XMLTree.append(command)
 
-
     # Does SET_BUY order exist for this user/stock combo?
     cursor.execute( 'SELECT transaction_amount  '
                     'FROM triggers              '
                     'WHERE username = %s        '
                     'AND stock_symbol = %s      '
                     'AND type = %s;             '
-                    , (user_id, stock_symbol, 'buy')) 
+                    ,(user_id, stock_symbol, 'buy')) 
     existing_setbuy_amount = cursor.fetchone() # this is a tuple containing 1 string or None
     setbuy_exists = None # placeholder value, will become True/False
     difference = 0
@@ -600,7 +618,10 @@ def set_buy_amount(transaction_num, user_id, stock_symbol, amount, cursor, conn)
         setbuy_exists = True
         difference = amount - float(existing_setbuy_amount[0]) #convert tuple containing string into float
     # confirm that the user has the appropriate funds in their account
-    cursor.execute('SELECT balance from users where username = %s', (user_id,))
+    cursor.execute( 'SELECT balance         '
+                    'FROM users             '
+                    'WHERE username = %s    '
+                    ,(user_id,))
     balance = float(cursor.fetchone()[0])
     print('balance of ', user_id, ': ', balance, "and type: ", type(balance))
     if balance < difference:
@@ -609,7 +630,7 @@ def set_buy_amount(transaction_num, user_id, stock_symbol, amount, cursor, conn)
             "timestamp": int(time.time() * 1000), 
             "server": "DDJK",
             "transactionNum": transaction_num,
-            "command": "BUY",
+            "command": "SET_BUY_AMOUNT",
             "username": user_id,
             "errorMessage": "Insufficient Funds" 
         }
@@ -624,28 +645,45 @@ def set_buy_amount(transaction_num, user_id, stock_symbol, amount, cursor, conn)
                             ,(difference, user_id))
 
         transaction = AccountTransaction()
-        attributes = {
-            "timestamp": int(time.time() * 1000), 
-            "server": "DDJK",
-            "transactionNum": transaction_num,
-            "action": "remove", 
-            "username": user_id,
-            "funds": float(difference)
-        }
+        if difference > 0: # money is to be removed from user account 
+            attributes = {
+                "timestamp": int(time.time() * 1000), 
+                "server": "DDJK",
+                "transactionNum": transaction_num,
+                "action": "remove", 
+                "username": user_id,
+                "funds": float(difference)
+            }
+        else : # difference < 0, therefore money is being refunded back into user account
+            attributes = {
+                "timestamp": int(time.time() * 1000), 
+                "server": "DDJK",
+                "transactionNum": transaction_num,
+                "action": "add", 
+                "username": user_id,
+                "funds": float(-difference) # difference is negative, so the log shows add of a positive
+            }
         transaction.updateAll(**attributes)
         XMLTree.append(transaction)        
         
         # if the order existed already, update it with the new BUY_AMOUNT, else create new record
         if setbuy_exists:
-            cursor.execute( 'UPDATE triggers SET transaction_amount = %s    '
+            cursor.execute( 'UPDATE triggers                                '
+                            'SET transaction_amount = %s,                   '
+                            '    transaction_number = %s                    '
                             'WHERE username = %s                            '
                             'AND stock_symbol = %s                          '
                             'AND type = %s;                                 '
-                            ,(amount, user_id, stock_symbol, 'buy'))
+                            ,(amount, transaction_num, user_id, stock_symbol, 'buy'))
         else: # setbuy_exists = False
-            cursor.execute( 'INSERT INTO triggers (username, stock_symbol, type, transaction_amount)    ' 
-                            'VALUES (%s, %s, %s, %s);                                                   '
-                            ,(user_id, stock_symbol, 'buy', amount))
+            cursor.execute( ' INSERT INTO triggers          '
+                            ' (username,                    '
+                            ' stock_symbol,                 '
+                            ' type,                         '
+                            ' transaction_amount,           '
+                            ' transaction_number)           ' 
+                            'VALUES (%s, %s, %s, %s, %s);   '
+                            ,(user_id, stock_symbol, 'buy', amount, transaction_num))
         conn.commit()
     return
 
@@ -727,7 +765,7 @@ def set_buy_trigger(transaction_num, user_id, stock_symbol, amount, cursor, conn
     command.updateAll(**attributes)
     XMLTree.append(command)
     
-    cursor.execute( 'SELECT transaction_amount from triggers        '
+    cursor.execute( 'SELECT transaction_amount FROM triggers        '
                     'WHERE username = %s    '
                     'AND stock_symbol = %s  '
                     'AND type = %s;         '
@@ -748,16 +786,20 @@ def set_buy_trigger(transaction_num, user_id, stock_symbol, amount, cursor, conn
         XMLTree.append(error)
         return
     else:
-        cursor.execute( 'UPDATE triggers SET trigger_amount = %s    '
-                        'WHERE username = %s                        '
-                        'AND stock_symbol = %s                      '
-                        'AND type = %s;                             '
-                        ,(amount, user_id, stock_symbol, 'buy'))
+        cursor.execute( ' UPDATE triggers               '
+                        ' SET trigger_amount = %s,      '
+                        '     transaction_number = %s  '
+                        ' WHERE username = %s           '
+                        ' AND stock_symbol = %s         '
+                        ' AND type = %s;                '
+                        ,(amount, transaction_num, user_id, stock_symbol, 'buy'))
         conn.commit()
     return 
 
 #TODO: if set_sell of this stock already exists, account for that stock when
 #      determining whether user owns enough stock to create set_sell order
+#   Also, it is now apparent this logic needs to change.  amount is a dollar amount, this has 
+#   been written under the assumption that it is a number of stock
 def set_sell_amount(transaction_num, user_id, stock_symbol, amount, cursor, conn):
     
     command = UserCommand()
@@ -815,9 +857,10 @@ def set_sell_amount(transaction_num, user_id, stock_symbol, amount, cursor, conn
         XMLTree.append(error)       
         return
     else:   # user owns sufficient shares to proceed, so remove them from user account and create order
-        cursor.execute( 'UPDATE stocks SET stock_quantity = stock_quantity - %s '
-                        'WHERE username = %s                                    '
-                        'AND stock_symbol = %s                                  '
+        cursor.execute( ' UPDATE stocks                 '
+                        ' SET stock_quantity = %s      '
+                        ' WHERE username = %s           '
+                        ' AND stock_symbol = %s         '
                         ,(amount, user_id, stock_symbol))
         # Does SET_SELL order exist for this user/stock combo?  If yes, modify record, else create new one
         cursor.execute( 'SELECT transaction_amount     '
@@ -828,15 +871,16 @@ def set_sell_amount(transaction_num, user_id, stock_symbol, amount, cursor, conn
                         ,(user_id, stock_symbol, 'sell')) 
         result = cursor.fetchone() # this is a tuple containing 1 string or None
         if result is None:
-            cursor.execute( 'INSERT INTO triggers (username, stock_symbol, type, transaction_amount)   ' 
-                            'VALUES (%s, %s, %s, %s);                                               '
-                            ,(user_id, stock_symbol, 'sell', amount))
+            cursor.execute( ' INSERT INTO triggers                                                      '
+                            ' (username, stock_symbol, type, transaction_amount, transaction_number)    ' 
+                            ' VALUES (%s, %s, %s, %s, %s);                                              '
+                            ,(user_id, stock_symbol, 'sell', amount, transaction_num))
         else: #modify existing record
-            cursor.execute( 'UPDATE triggers SET amount = amount + %s   '
-                            'WHERE username = %s                        '
-                            'AND stock_symbol = %s                      '
-                            'AND type = %s                              '
-                            ,(amount, user_id, stock_symbol, 'sell'))
+            cursor.execute( ' UPDATE triggers SET amount = amount + %s, transaction_number = %s '
+                            ' WHERE username = %s                                               '
+                            ' AND stock_symbol = %s                                             '
+                            ' AND type = %s                                                     '
+                            ,(amount, transaction_num, user_id, stock_symbol, 'sell'))
         conn.commit()
     return
 
@@ -876,11 +920,12 @@ def set_sell_trigger(transaction_num, user_id, stock_symbol, amount, cursor, con
         XMLTree.append(error)
         return
     else:
-        cursor.execute( 'UPDATE triggers SET trigger_amount = %s    '
-                        'WHERE username = %s                        '
-                        'AND stock_symbol = %s                      '
-                        'AND type = %s;                             '
-                        ,(amount, user_id, stock_symbol, 'sell'))
+        cursor.execute( ' UPDATE triggers SET trigger_amount = %s,  '
+                        '        transaction_number = %s            '  
+                        ' WHERE username = %s                       '
+                        ' AND stock_symbol = %s                     '
+                        ' AND type = %s;                            '
+                        ,(amount, transaction_num, user_id, stock_symbol, 'sell'))
         conn.commit()
     return 
 
@@ -940,15 +985,24 @@ def trigger_maintainer(cursor, conn):
                                 # I've done this now though to avoid having stuff on cursor's buffer
     print("running trigger_maintainer")
     for row in results:
-        print(row)
+        print("row from 'triggers' as it is read:", row)
         user_id = row[0]
         stock_symbol = row[1]
         buy_or_sell = row[2]
         trigger_amount = row[3]
         transaction_amount = row[4]
-        # CHANGE THIS BACK JAIME JAIME JAIME CHANGE THIS BACK
-        current_price = quote(1, user_id, stock_symbol)[0]
-        print("row details: user_id:", user_id, "stock_symbol:", stock_symbol, "buy_or_sell:", buy_or_sell, "trigger_amount:", trigger_amount, "transaction_amount:", transaction_amount, "current_price:", current_price)
+        transaction_num= row[5]
+        current_price = quote(transaction_num, user_id, stock_symbol)[0]
+
+        # Debugging data
+        print("row details: user_id:", user_id, 
+            "stock_symbol:", stock_symbol, 
+            "buy_or_sell:", buy_or_sell, 
+            "trigger_amount:", trigger_amount, 
+            "transaction_amount:", transaction_amount, 
+            "transaction_number: ", transaction_num, 
+            "current_price:", current_price)
+
         if buy_or_sell == 'buy' and current_price <= trigger_amount: # trigger the buy
             num_stocks_to_buy = int(transaction_amount/current_price)
             leftover_cash = transaction_amount - (current_price * num_stocks_to_buy)
@@ -983,7 +1037,7 @@ def trigger_maintainer(cursor, conn):
             attributes = {
                 "timestamp": int(time.time() * 1000), 
                 "server": "DDJK",
-                "transactionNum": 1,
+                "transactionNum": transaction_num,
                 "action": "add", 
                 "username": user_id,
                 "funds": float(leftover_cash)
@@ -999,7 +1053,8 @@ def trigger_maintainer(cursor, conn):
                             ,(user_id, stock_symbol, buy_or_sell))
             conn.commit()
 
-        #TODO: implement the elif below
+        # NOTE: this method is still using the incorrect logic - it assums amount == num of stock
+        # When making the C++ version, correct the logic to assume amount == dollar amount
         elif buy_or_sell == 'sell' and current_price >= trigger_amount: # trigger the sell
             cash_from_sale = current_price * transaction_amount
             # credit user account from sale

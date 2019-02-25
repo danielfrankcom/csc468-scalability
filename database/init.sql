@@ -1,3 +1,8 @@
+DROP TABLE IF EXISTS stocks;
+DROP TABLE IF EXISTS reserved;
+DROP TABLE IF EXISTS triggers;
+DROP TABLE IF EXISTS users;
+
 CREATE TABLE users (
     username VARCHAR(20) NOT NULL PRIMARY KEY,
     balance FLOAT NOT NULL
@@ -28,6 +33,7 @@ CREATE TABLE triggers (
 	type VARCHAR(5) NOT NULL,
 	trigger_amount FLOAT,
 	transaction_amount FLOAT NOT NULL,
+    transaction_number INT NOT NULL,
 	PRIMARY KEY (username, stock_symbol, type)
 );
 
