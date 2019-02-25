@@ -75,8 +75,8 @@ def contact_server(query):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
         # Connect the socket
-        s.connect(('quoteserve.seng.uvic.ca', 4444))
-        #s.connect(('quote-cache', 6000))
+        #s.connect(('quoteserve.seng.uvic.ca', 4444))
+        s.connect(('quote-cache', 6000))
 
         # Send the user's query
         s.send(query.encode())
