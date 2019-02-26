@@ -158,6 +158,7 @@ def buy_timeout(user_id, stock_symbol, dollar_amount, cursor, conn):
     try:
         result = cursor.fetchone()
     except:
+        conn.rollback()
         return
 
     if result is None: #order has already been manually confirmed or cancelled
@@ -168,7 +169,11 @@ def buy_timeout(user_id, stock_symbol, dollar_amount, cursor, conn):
         reserved_cash = result[6]
         cursor.execute('DELETE FROM reserved WHERE reservationid = %s;', (reservationid,))    
         cursor.execute('SELECT balance FROM users where username = %s;', (user_id,))
-        result = cursor.fetchall()
+        try:
+            result = cursor.fetchall()
+        except:
+            conn.rollback()
+            return
         if result is None:
             print("Error - user does not exist!")
             return
@@ -297,6 +302,7 @@ def commit_buy(transaction_num, user_id, cursor, conn):
                 amount = elements[3]
                 price = elements[4]
             except:
+                conn.rollback()
                 return
             
             
@@ -328,6 +334,7 @@ def commit_buy(transaction_num, user_id, cursor, conn):
             conn.commit()        
         return
     except:
+        conn.rollback()
         pass
 
 def cancel_buy(transaction_num, user_id, cursor, conn):
@@ -354,6 +361,7 @@ def cancel_buy(transaction_num, user_id, cursor, conn):
     try:
         elements = cursor.fetchone()
     except:
+        conn.rollback()
         return
 
     if elements is None:
@@ -415,6 +423,7 @@ def sell(transaction_num, user_id, stock_symbol, amount, cursor, conn):
     try:
         test = cursor.fetchall()
     except:
+        conn.rollback()
         return
 
     for i in test:
@@ -422,7 +431,11 @@ def sell(transaction_num, user_id, stock_symbol, amount, cursor, conn):
         if i[0] == user_id:
             cursor.execute("SELECT stock_quantity FROM stocks WHERE username = %s AND stock_symbol = %s", (user_id, stock_symbol))
             conn.commit()
-            stock_quantity = cursor.fetchall()
+            try:
+                stock_quantity = cursor.fetchall()
+            except:
+                conn.rollback()
+                return
             stocks_to_sell = int(float(amount)/price)
             if stock_quantity != []:
                 # User owns enough of the stock to sell the specified amount
@@ -516,7 +529,11 @@ def commit_sell(transaction_num, user_id, cursor, conn):
                             , ('sell', user_id, 'sell', user_id))
             conn.commit()
 
-            elements = cursor.fetchone()
+            try:
+                elements = cursor.fetchone()
+            except:
+                conn.rollback()
+                return
             reservationid = elements[0]
             stock_symbol = elements[1]
             stock_quantity = elements[2]
@@ -542,6 +559,7 @@ def commit_sell(transaction_num, user_id, cursor, conn):
             conn.commit()        
         return
     except:
+        conn.rollback()
         pass
 
 def cancel_sell(transaction_num, user_id, cursor, conn):
@@ -559,7 +577,11 @@ def cancel_sell(transaction_num, user_id, cursor, conn):
     command.updateAll(**attributes)
     XMLTree.append(command)
 
-    elements = cursor.fetchone()
+    try:
+        elements = cursor.fetchone()
+    except:
+        conn.rollback()
+        return
     if elements is None:
         error = ErrorEvent()
         attributes = {
@@ -608,7 +630,11 @@ def set_buy_amount(transaction_num, user_id, stock_symbol, amount, cursor, conn)
                     'AND stock_symbol = %s      '
                     'AND type = %s;             '
                     ,(user_id, stock_symbol, 'buy')) 
-    existing_setbuy_amount = cursor.fetchone() # this is a tuple containing 1 string or None
+    try:
+        existing_setbuy_amount = cursor.fetchone() # this is a tuple containing 1 string or None
+    except:
+        conn.rollback()
+        return
     setbuy_exists = None # placeholder value, will become True/False
     difference = 0
     if existing_setbuy_amount is None:
@@ -622,7 +648,11 @@ def set_buy_amount(transaction_num, user_id, stock_symbol, amount, cursor, conn)
                     'FROM users             '
                     'WHERE username = %s    '
                     ,(user_id,))
-    balance = float(cursor.fetchone()[0])
+    try:
+        balance = float(cursor.fetchone()[0])
+    except:
+        conn.rollback()
+        return
     print('balance of ', user_id, ': ', balance, "and type: ", type(balance))
     if balance < difference:
         error = ErrorEvent()
@@ -706,7 +736,11 @@ def cancel_set_buy(transaction_num, user_id, stock_symbol, cursor, conn):
                     'AND stock_symbol = %s                      ' 
                     'AND type = %s;                             '
                     ,(user_id, stock_symbol, 'buy'))
-    result = cursor.fetchone()
+    try:
+        result = cursor.fetchone()
+    except:
+        conn.rollback()
+        return
     if result is None:
         error = ErrorEvent()
         attributes = {
@@ -770,7 +804,11 @@ def set_buy_trigger(transaction_num, user_id, stock_symbol, amount, cursor, conn
                     'AND stock_symbol = %s  '
                     'AND type = %s;         '
                     ,(user_id, stock_symbol, 'buy'))
-    result = cursor.fetchone()
+    try:
+        result = cursor.fetchone()
+    except:
+        conn.rollback()
+        return
     if result is None:
 
         error = ErrorEvent()
@@ -827,7 +865,11 @@ def set_sell_amount(transaction_num, user_id, stock_symbol, amount, cursor, conn
                     'WHERE username = %s                    '
                     'AND stock_symbol = %s;                 '
                     ,(user_id, stock_symbol))
-    shares_owned = cursor.fetchone()
+    try:
+        shares_owned = cursor.fetchone()
+    except:
+        conn.rollback()
+        return
     if shares_owned is None:
         
         error = ErrorEvent()
@@ -869,7 +911,11 @@ def set_sell_amount(transaction_num, user_id, stock_symbol, amount, cursor, conn
                         'AND stock_symbol = %s      '
                         'AND type = %s;             '
                         ,(user_id, stock_symbol, 'sell')) 
-        result = cursor.fetchone() # this is a tuple containing 1 string or None
+        try:
+            result = cursor.fetchone() # this is a tuple containing 1 string or None
+        except:
+            conn.rollback()
+            return
         if result is None:
             cursor.execute( ' INSERT INTO triggers                                                      '
                             ' (username, stock_symbol, type, transaction_amount, transaction_number)    ' 
@@ -904,7 +950,11 @@ def set_sell_trigger(transaction_num, user_id, stock_symbol, amount, cursor, con
                     'AND stock_symbol = %s  '
                     'AND type = %s;         '
                     ,(user_id, stock_symbol, 'sell'))
-    result = cursor.fetchone()
+    try:
+        result = cursor.fetchone()
+    except:
+        conn.rollback()
+        return
     if result is None:
 
         error = ErrorEvent()
@@ -947,7 +997,11 @@ def cancel_set_sell(transaction_num, user_id, stock_symbol, cursor, conn):
                     'WHERE username = %s                    '
                     'AND stock_symbol = %s;                '
                     ,(user_id, stock_symbol))
-    result = cursor.fetchall()
+    try:
+        result = cursor.fetchall()
+    except:
+        conn.rollback()
+        return
     if len(result) == 0:
         error = ErrorEvent()
         attributes = {
@@ -981,8 +1035,12 @@ def cancel_set_sell(transaction_num, user_id, stock_symbol, cursor, conn):
 # obtained for that stock and if appropriate the buy/sell is triggered
 def trigger_maintainer(cursor, conn):
     cursor.execute('SELECT * FROM triggers WHERE trigger_amount IS NOT NULL;')
-    results = cursor.fetchall() # NOTE: this will not scale - we may have HUGE numbers of rows later
-                                # I've done this now though to avoid having stuff on cursor's buffer
+    try:
+        results = cursor.fetchall() # NOTE: this will not scale - we may have HUGE numbers of rows later
+                                    # I've done this now though to avoid having stuff on cursor's buffer
+    except:
+        conn.rollback()
+        return
     print("running trigger_maintainer")
     for row in results:
         print("row from 'triggers' as it is read:", row)
@@ -1012,7 +1070,11 @@ def trigger_maintainer(cursor, conn):
                             'WHERE username = %s                '
                             'AND stock_symbol = %s              '
                             ,(user_id, stock_symbol))
-            result = cursor.fetchone()
+            try:
+                result = cursor.fetchone()
+            except:
+                conn.rollback()
+                return
 
             if result is None: # the user had none of this stock previously
                 cursor.execute( 'INSERT INTO stocks (username, stock_symbol, stock_quantity)    ' 
