@@ -90,29 +90,42 @@ public class Generator {
     private static long execute(AsyncHttpClient client, Request... requests) {
         final long start = System.nanoTime();
 
-        final List<Future<Response>> responses = new ArrayList<>(requests.length);
+        final List<Future<Response>> responses = new ArrayList<>(10);
+	for (int i = 0; i < 10; i++) {
+		responses.add(null);
+	}
+		int index = 0;
         for (Request request : requests) {
             Future<Response> response = client.executeRequest(request);
+			responses.set(index++, response);
+			
+			if (index == 10) {
+				for (Future<Response> future : responses) {
 
-            final Response actual;
-            try {
-                actual = response.get();
-            } catch (Throwable e) {
-                e.printStackTrace();
-                System.out.println("Exception occurred while parsing response");
-                break;
-            }
+					final Response actual;
+					try {
+						actual = future.get();
+					} catch (Throwable e) {
+						e.printStackTrace();
+						System.out.println("Exception occurred while parsing response");
+						break;
+					}
 
-            final int statusCode = actual.getStatusCode();
-            if (statusCode != 200) {
-                System.out.printf("Request returned status code %d.\n", statusCode);
-                System.exit(1);
-            }
+					final int statusCode = actual.getStatusCode();
+					if (statusCode != 200) {
+						System.out.printf("Request returned status code %d.\n", statusCode);
+						System.exit(1);
+					}
+
+				}
+				index = 0;
+			}
+
+
         }
 
-        final long finish = System.nanoTime();
-        return finish - start;
-
+		final long finish = System.nanoTime();
+		return finish - start;
     }
 
 } 

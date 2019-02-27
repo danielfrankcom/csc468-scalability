@@ -18,6 +18,11 @@ sudo -E docker-compose \
 	--build-arg HTTP_PROXY=$http_proxy \
 	--build-arg HTTPS_PROXY=$https_proxy
 
+# Stop all containers.
+sudo -E docker-compose \
+    -f $YML_PATH \
+    down
+
 # Restart the containers.
 sudo -E docker-compose \
 	-f $YML_PATH \

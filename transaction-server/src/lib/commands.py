@@ -11,7 +11,7 @@ cached_quotes = {}
 
 XMLTree = LogBuilder()
 
-def initdb():
+def create_connection():
     conn = None
     try:
         # Setting connection params:
@@ -32,7 +32,7 @@ def initdb():
     except (Exception, psycopg2.DatabaseError) as error:
         print(error)
 
-def closedb(cursor):
+def close_connection(cursor):
     cursor.close()
 
 def add(transaction_num, user_id, amount, cursor, conn):
@@ -53,7 +53,9 @@ def add(transaction_num, user_id, amount, cursor, conn):
                 "SET balance = (users.balance + {amount}) " \
                 "WHERE users.username = '{username}';".format(username=user_id, amount=amount)
     
+    print("about to execute " + str(transaction_num))
     cursor.execute(function)
+    print("finished executing " + str(transaction_num))
     conn.commit()
         
     transaction = AccountTransaction()

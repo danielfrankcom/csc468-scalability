@@ -2,12 +2,14 @@ import sys, os, re
 from flask import Flask, request, jsonify
 from lib.commands import *
 
+from queue import Queue
+
 pattern = re.compile(r"^\[(\d+)\] ([A-Z_]+),([^ ]+) ?$")
 
 """
 Provides a method to call with parameters.
 """
-def parseCommand(raw):
+def parseCommand(raw, cursor, conn):
 
     match = re.findall(pattern, raw)
 
@@ -148,14 +150,24 @@ def parseCommand(raw):
         print(arguments, " Invalid Command")
 
 app = Flask(__name__)
-cursor, conn = initdb()
+
+connections = Queue(10)
+
+for i in range(0, 10):
+    connections.put(create_connection())
 
 @app.route('/', methods=['POST'])
 def root():
 
     body = request.data.decode('utf-8')
     print(body, flush=True)
-    parseCommand(body)
+
+    cursor, conn = connections.get()
+    print("done " + body)
+    parseCommand(body, cursor, conn)
+    print("here2 " + body)
+    connections.put((cursor, conn))
+    print("here1 " + body)
 
     response = jsonify(success=True)
     return response
