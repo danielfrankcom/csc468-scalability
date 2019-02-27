@@ -10,5 +10,5 @@ RUN apk --update add openjdk8
 WORKDIR /src
 COPY ./src /src
 
-#-Dhttp.proxyHost=192.168.1.1 -Dhttp.proxyPort=3128 
-RUN ./gradlew build
+#
+RUN ./gradlew -Dhttp.proxyHost=192.168.1.1 -Dhttp.proxyPort=3128 build

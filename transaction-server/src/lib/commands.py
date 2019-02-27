@@ -26,7 +26,7 @@ def initdb():
         cursor = conn.cursor()
 
         #start the trigger maintainer thread
-        threading.Timer(QUOTE_LIFESPAN, trigger_maintainer, args=(cursor, conn)).start()
+        #threading.Timer(QUOTE_LIFESPAN, trigger_maintainer, args=(cursor, conn)).start()
 
         return cursor, conn
     except (Exception, psycopg2.DatabaseError) as error:
@@ -100,8 +100,8 @@ def get_quote(user_id, stock_symbol):
 
         request = "{symbol},{user}\n".format(symbol=stock_symbol, user=user_id)
 
-        #data = contact_server(request)
-        data = fake_server(request)
+        data = contact_server(request)
+        #data = fake_server(request)
 
         price, symbol, username, timestamp, cryptokey = data.split(",")
         return float(price), int(timestamp), cryptokey, username
@@ -255,7 +255,7 @@ def buy(transaction_num, user_id, stock_symbol, amount, cursor, conn):
     transaction.updateAll(**attributes)
     XMLTree.append(transaction)
 
-    threading.Timer(QUOTE_LIFESPAN, buy_timeout, args=(user_id, stock_symbol, amount, cursor, conn)).start()
+    #threading.Timer(QUOTE_LIFESPAN, buy_timeout, args=(user_id, stock_symbol, amount, cursor, conn)).start()
 
 
 def commit_buy(transaction_num, user_id, cursor, conn):
@@ -446,7 +446,7 @@ def sell(transaction_num, user_id, stock_symbol, amount, cursor, conn):
                     conn.commit() 
 
                     # create timer, when timer finishes have it cancel the buy
-                    threading.Timer(QUOTE_LIFESPAN, buy_timeout, args=(user_id, stock_symbol, amount, cursor, conn)).start()
+                    #threading.Timer(QUOTE_LIFESPAN, buy_timeout, args=(user_id, stock_symbol, amount, cursor, conn)).start()
                 else:
                     error = ErrorEvent()
                     attributes = {
@@ -1146,7 +1146,7 @@ def trigger_maintainer(cursor, conn):
 
     # recurse, but using another thread.  I'm not sure, but I believe this avoids busy-waiting 
     # even on the new thread.  This needs more looking into to be sure if it's optimal
-    threading.Timer(QUOTE_LIFESPAN, trigger_maintainer, args=(cursor, conn)).start()
+    #threading.Timer(QUOTE_LIFESPAN, trigger_maintainer, args=(cursor, conn)).start()
 
 def dumplog(transaction_num, filename):
     command = UserCommand()
