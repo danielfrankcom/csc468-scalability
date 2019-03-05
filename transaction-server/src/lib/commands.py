@@ -22,6 +22,9 @@ def create_connection():
         psql_port = 5432
         
         conn = psycopg2.connect(dbname=psql_db,user=psql_user,password=psql_password,host=psql_server,port=psql_port)
+        conn.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_READ_COMMITTED)
+        #conn.set_isolation_level(0)
+        print(conn.isolation_level)
 
         cursor = conn.cursor()
 
@@ -36,6 +39,7 @@ def close_connection(cursor):
     cursor.close()
 
 def add(transaction_num, user_id, amount, cursor, conn):
+    print("running " + str(transaction_num))
     command = UserCommand()
     attributes = {
         "timestamp": int(time.time() * 1000), 
@@ -48,15 +52,16 @@ def add(transaction_num, user_id, amount, cursor, conn):
     XMLTree.append(command)
     
     function =  "INSERT INTO users (username, balance) " \
-                "VALUES ('{username}', {amount}) " \
-                "ON CONFLICT (username) DO UPDATE " \
-                "SET balance = (users.balance + {amount}) " \
-                "WHERE users.username = '{username}';".format(username=user_id, amount=amount)
+                "VALUES ('{username}', {amount});".format(username=user_id, amount=amount)
+                #"ON CONFLICT (username) DO UPDATE " \
+                #"SET balance = (users.balance + {amount}) " \
+                #"WHERE users.username = '{username}';"
     
-    print("about to execute " + str(transaction_num))
+    print("about to execute " + str(transaction_num), flush=True)
     cursor.execute(function)
-    print("finished executing " + str(transaction_num))
+    print("finished executing " + str(transaction_num), flush=True)
     conn.commit()
+    print("commited " + str(transaction_num), flush=True)
         
     transaction = AccountTransaction()
     attributes = {

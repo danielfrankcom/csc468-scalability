@@ -3,6 +3,9 @@ from flask import Flask, request, jsonify
 from lib.commands import *
 
 from queue import Queue
+import time
+import psycopg2
+from psycopg2 import pool
 
 pattern = re.compile(r"^\[(\d+)\] ([A-Z_]+),([^ ]+) ?$")
 
@@ -153,8 +156,12 @@ app = Flask(__name__)
 
 connections = Queue(10)
 
-for i in range(0, 10):
-    connections.put(create_connection())
+time.sleep(10)
+#for i in range(0, 10):
+    #connections.put(create_connection())
+    #print("making")
+
+pool = psycopg2.pool.ThreadedConnectionPool(10, 20, user="postgres", password="supersecure", host="postgres", port="5432", database="postgres")
 
 @app.route('/', methods=['POST'])
 def root():
@@ -162,11 +169,11 @@ def root():
     body = request.data.decode('utf-8')
     print(body, flush=True)
 
-    cursor, conn = connections.get()
+    conn = pool.getconn()
     print("done " + body)
-    parseCommand(body, cursor, conn)
+    parseCommand(body, conn.cursor(), conn)
     print("here2 " + body)
-    connections.put((cursor, conn))
+    pool.putconn(conn)
     print("here1 " + body)
 
     response = jsonify(success=True)
