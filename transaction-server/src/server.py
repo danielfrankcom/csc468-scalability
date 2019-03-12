@@ -1,4 +1,5 @@
 import re, time
+from threading import Thread
 
 from flask import Flask, request, jsonify
 from lib.commands import *
@@ -29,9 +30,11 @@ def parseCommand(raw, conn):
         except ValueError:
             print("Invalid Input. <ADD, USER_ID, AMOUNT>")
         else:    
-            add(transactionNum, user_id, amount, conn)
+            for i in range(10):
+                add(transactionNum, user_id, amount, conn)
 
 app = Flask(__name__)
+app.run(threaded=True, host='0.0.0.0')
 
 time.sleep(10) # hack for now to let database start up properly
 pool = psycopg2.pool.ThreadedConnectionPool(10, 20, user="postgres", password="supersecure", host="postgres", port="5432", database="postgres")
@@ -41,10 +44,19 @@ def root():
 
     body = request.data.decode('utf-8')
     print(body, flush=True)
+    body = "[1] ADD,usr1,100"
 
-    conn = pool.getconn()
-    parseCommand(body, conn)
-    pool.putconn(conn)
+    #parseCommand(body, conn)
+
+    threads = []
+    for i in range(0, 10):
+        conn = pool.getconn()
+        t = Thread(target=parseCommand, args=(body, conn))
+        # pool.putconn(conn) We don't need to put this back for the test scenario but we should later
+        threads.append(t)
+
+    for thread in threads:
+        thread.start()
 
     response = jsonify(success=True)
     return response

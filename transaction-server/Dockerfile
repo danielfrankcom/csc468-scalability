@@ -20,4 +20,5 @@ WORKDIR /src
 COPY ./src /src
 
 # Configure command to run on startup.
-CMD ["gunicorn", "--bind", "0.0.0.0:5000","--workers=10","--preload","wsgi:application"]
+#CMD ["gunicorn", "--bind", "0.0.0.0:5000","--workers=1","--preload","wsgi:application"]
+CMD ["flask", "run", "--host", "0.0.0.0"]
