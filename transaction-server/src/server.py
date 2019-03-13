@@ -2,12 +2,19 @@ import sys, os, re
 from flask import Flask, request, jsonify
 from lib.commands import *
 
+from queue import Queue
+from threading import Thread
+import time
+import psycopg2
+from psycopg2 import pool
+
 pattern = re.compile(r"^\[(\d+)\] ([A-Z_]+),([^ ]+) ?$")
+
 
 """
 Provides a method to call with parameters.
 """
-def parseCommand(raw):
+def parse(raw, cursor, conn):
 
     match = re.findall(pattern, raw)
 
@@ -148,14 +155,36 @@ def parseCommand(raw):
         print(arguments, " Invalid Command")
 
 app = Flask(__name__)
-cursor, conn = initdb()
+
+WORKERS=40
+
+time.sleep(10) # hack - fix me
+pool = psycopg2.pool.ThreadedConnectionPool(10, WORKERS, user="postgres", password="supersecure", host="postgres", port="5432", database="postgres")
+
+transactions = Queue()
+
+def process():
+    
+    while True:
+        transaction = transactions.get()
+        print("Received!")
+        conn = pool.getconn()
+
+        parse(transaction, conn.cursor(), conn)
+        print("Processed!")
+        pool.putconn(conn)
+
+for i in range(WORKERS):
+    t = Thread(target=process)
+    t.start()
 
 @app.route('/', methods=['POST'])
 def root():
 
     body = request.data.decode('utf-8')
     print(body, flush=True)
-    parseCommand(body)
+
+    transactions.put(body)
 
     response = jsonify(success=True)
     return response

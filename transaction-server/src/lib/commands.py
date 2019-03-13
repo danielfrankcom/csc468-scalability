@@ -11,30 +11,6 @@ cached_quotes = {}
 
 XMLTree = LogBuilder()
 
-def initdb():
-    conn = None
-    try:
-        # Setting connection params:
-        psql_db = 'postgres'
-        psql_user = 'postgres'
-        psql_password = 'supersecure'
-        psql_server = 'postgres'
-        psql_port = 5432
-        
-        conn = psycopg2.connect(dbname=psql_db,user=psql_user,password=psql_password,host=psql_server,port=psql_port)
-
-        cursor = conn.cursor()
-
-        #start the trigger maintainer thread
-        #threading.Timer(QUOTE_LIFESPAN, trigger_maintainer, args=(cursor, conn)).start()
-
-        return cursor, conn
-    except (Exception, psycopg2.DatabaseError) as error:
-        print(error)
-
-def closedb(cursor):
-    cursor.close()
-
 def add(transaction_num, user_id, amount, cursor, conn):
     command = UserCommand()
     attributes = {
@@ -1159,6 +1135,7 @@ def dumplog(transaction_num, filename):
     command.updateAll(**attributes)
     XMLTree.append(command)
     
+    time.sleep(30) # hack - fix me
     XMLTree.write(filename)
 
 def dumplog_user(transaction_num, user_id, filename):
@@ -1173,6 +1150,7 @@ def dumplog_user(transaction_num, user_id, filename):
     command.updateAll(**attributes)
     XMLTree.append(command)
 
+    time.sleep(30) # hack - fix me
     XMLTree.writeFiltered(filename, user_id)
 
 
