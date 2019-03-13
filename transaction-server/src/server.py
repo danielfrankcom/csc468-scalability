@@ -156,7 +156,7 @@ def parse(raw, cursor, conn):
 
 app = Flask(__name__)
 
-WORKERS=40
+WORKERS=80
 
 time.sleep(10) # hack - fix me
 pool = psycopg2.pool.ThreadedConnectionPool(10, WORKERS, user="postgres", password="supersecure", host="postgres", port="5432", database="postgres")
@@ -167,7 +167,7 @@ def process():
     
     while True:
         transaction = transactions.get()
-        print("Received!")
+        print("Received: " + transaction)
         conn = pool.getconn()
 
         parse(transaction, conn.cursor(), conn)

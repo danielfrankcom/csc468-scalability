@@ -908,18 +908,21 @@ def set_sell_amount(transaction_num, user_id, stock_symbol, amount, cursor, conn
 
 def set_sell_trigger(transaction_num, user_id, stock_symbol, amount, cursor, conn):
     
-    command = UserCommand()
-    attributes = {
-        "timestamp": int(time.time() * 1000), 
-        "server": "DDJK",
-        "transactionNum": transaction_num,
-        "command": "SET_SELL_TRIGGER",
-        "username": user_id,
-        "stockSymbol": stock_symbol,
-        "funds": float(amount)
-    }
-    command.updateAll(**attributes)
-    XMLTree.append(command)
+    try:
+        command = UserCommand()
+        attributes = {
+            "timestamp": int(time.time() * 1000), 
+            "server": "DDJK",
+            "transactionNum": transaction_num,
+            "command": "SET_SELL_TRIGGER",
+            "username": user_id,
+            "stockSymbol": stock_symbol,
+            "funds": float(amount)
+        }
+        command.updateAll(**attributes)
+        XMLTree.append(command)
+    except:
+        return
     
     cursor.execute( 'SELECT transaction_amount from triggers        '
                     'WHERE username = %s    '
