@@ -8,7 +8,13 @@ ENV https_proxy=$HTTPS_PROXY
 RUN apk --update add openjdk8
 
 WORKDIR /src
-COPY ./src /src
 
-#
+COPY ./src/gradlew /src/gradlew
+COPY ./src/gradle /src/gradle
+#COPY ./src/build.gradle /src/build.gradle
+
+# Cache gradle zip file
+RUN ./gradlew -Dhttp.proxyHost=192.168.1.1 -Dhttp.proxyPort=3128
+
+COPY ./src /src
 RUN ./gradlew -Dhttp.proxyHost=192.168.1.1 -Dhttp.proxyPort=3128 build
