@@ -9,7 +9,6 @@ RUN apk --update add py3-psycopg2
 
 RUN pip3 --trusted-host pypi.org --trusted-host files.pythonhosted.org install --upgrade pip
 RUN pip3 --trusted-host pypi.org --trusted-host files.pythonhosted.org install flask
-RUN pip3 --trusted-host pypi.org --trusted-host files.pythonhosted.org install gunicorn
 
 # Configure Flask server.
 ENV FLASK_APP=/src/server.py
@@ -20,4 +19,4 @@ WORKDIR /src
 COPY ./src /src
 
 # Configure command to run on startup.
-CMD ["gunicorn", "--bind", "0.0.0.0:5000","--workers=10","--preload","wsgi:application"]
+CMD ["flask", "run", "--host=0.0.0.0"]
