@@ -12,6 +12,8 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
+import java.util.LinkedHashMap;
 import java.util.concurrent.Future;
 
 
@@ -20,10 +22,15 @@ public class Generator {
     private static final int NS_IN_MS = 1_000_000;
     private static final int MS_IN_S = 1_000;
 
-    private static final String HOSTNAME = "transaction-server";
-    private static final int PORT = 5000;
+    //private static final String HOSTNAME = "transaction-server";
+    private static final int PORT = 4000;
 
-    private static final String URL = "http://" + HOSTNAME + ":" + PORT;
+    private static final String[] ADDRESSES = new String[]{
+    	"192.168.1.249"
+    };
+
+    private static final String URL_PRE = "http://";
+    private static final String URL_POST = ":" + PORT;
 
     public static void main(String args[]) {
 
@@ -68,9 +75,26 @@ public class Generator {
         final int numRequests = lines.size();
         final Request[] requests = new Request[numRequests];
 
+	final int servers = ADDRESSES.length;
+	final Map<String, String> lookup = new LinkedHashMap<>();
+	int index = 0;
+
         for (int i = 0; i < numRequests; i++) {
-            requests[i] = Dsl.post(URL)
-                    .setBody(iterator.next())
+	    final String body = iterator.next();
+	    final String username = body.split(",")[1];
+
+	    final String host;
+	    if (lookup.containsKey(username)) {
+		host = lookup.get(username);
+	    } else {
+		host = ADDRESSES[index];
+		index = (index + 1) % ADDRESSES.length;
+		lookup.put(username, host);
+	    }
+
+	    System.out.println(URL_PRE + host + URL_POST);
+            requests[i] = Dsl.post(URL_PRE + host + URL_POST)
+                    .setBody(body)
                     .build();
         }
 
