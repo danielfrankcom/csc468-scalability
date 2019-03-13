@@ -26,7 +26,9 @@ public class Generator {
     private static final int PORT = 4000;
 
     private static final String[] ADDRESSES = new String[]{
-    	"192.168.1.249"
+    	"192.168.1.249",
+    	"192.168.1.226",
+    	"192.168.1.223"
     };
 
     private static final String URL_PRE = "http://";
@@ -73,13 +75,14 @@ public class Generator {
 
         final Iterator<String> iterator = lines.iterator();
         final int numRequests = lines.size();
-        final Request[] requests = new Request[numRequests];
+        final Request[] requests = new Request[numRequests + ADDRESSES.length - 1];
 
 	final int servers = ADDRESSES.length;
 	final Map<String, String> lookup = new LinkedHashMap<>();
 	int index = 0;
+	int i;
 
-        for (int i = 0; i < numRequests; i++) {
+        for (i = 0; i < numRequests - 1; i++) {
 	    final String body = iterator.next();
 	    final String username = body.split(",")[1];
 
@@ -92,11 +95,16 @@ public class Generator {
 		lookup.put(username, host);
 	    }
 
-	    System.out.println(URL_PRE + host + URL_POST);
             requests[i] = Dsl.post(URL_PRE + host + URL_POST)
                     .setBody(body)
                     .build();
         }
+
+	for (String host : ADDRESSES) {
+            requests[i++] = Dsl.post(URL_PRE + host + URL_POST)
+                    .setBody("[1000000] DUMPLOG,./testLOG")
+                    .build();
+	}
 
         final AsyncHttpClient client = Dsl.asyncHttpClient();
 
