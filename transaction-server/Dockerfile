@@ -17,5 +17,7 @@ ENV FLASK_ENV=development
 ENV FLASK_DEBUG=1
 
 WORKDIR /src
+COPY ./src /src
+
 # Configure command to run on startup.
-CMD ["gunicorn", "--bind", "0.0.0.0:5000","--workers=1","wsgi:application"]
+CMD ["gunicorn", "--bind", "0.0.0.0:5000","--workers=10","--preload","wsgi:application"]
