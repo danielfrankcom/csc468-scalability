@@ -168,9 +168,32 @@ def process():
     while True:
         transaction = transactions.get()
         print("Received: " + transaction)
+
+        match = re.findall(pattern, raw)
+        if not match:
+            continue
+
         conn = pool.getconn()
 
-        parse(transaction, conn.cursor(), conn)
+        try:
+            parse(transaction, conn.cursor(), conn)
+        except Exception: 
+            transactionNum, command, arguments = match[0]
+            transactionNum = int(transactionNum)
+            arguments = arguments.split(",")
+            user_id = arguments[0]
+            
+            error = ErrorEvent()
+            attributes = {
+                "timestamp": int(time.time() * 1000),
+                "server": "DDJK",
+                "transactionNum": transactionNum,
+                "username": user_id
+                "errorMessage": "Improperly formed command"
+            }
+            error.updateAll(**attributes)
+            XMLTree.append(error)
+
         print("Processed!")
         pool.putconn(conn)
 
