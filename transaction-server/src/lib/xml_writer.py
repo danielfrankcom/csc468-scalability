@@ -1,6 +1,8 @@
+import os
+from threading import Thread
+from queue import Queue
 import xml.etree.ElementTree as ET
 from xml.dom import minidom
-
 
 """
 VERIFICATION FUNCTION DEFINITIONS
@@ -248,18 +250,74 @@ through the use of the #append(event) method.
 class LogBuilder:
 
     """
-    Initialize the builder.
+    Continuously read from the queue and append to a file.
+
+    filename: The file to append to
     """
-    def __init__(self):
-        self._elements = []
+    def _processFile(self, filename):
+
+        f = open(filename, "w+")
+        
+        while (True):
+            item = self.queue.get()
+
+            if "DUMPLOG" in item:
+                if not self.queue.empty():
+                    self.queue.put(item)
+                    continue
+                else:
+                    f.write(item)
+                    f.close()
+                    break
+            else:
+                f.write(item + "\n")
 
     """
     Initialize the builder.
+    """
+    def __init__(self, filename=None):
+        self._elements = []
+        if filename:
+            try:
+                os.remove(filename)
+            except:
+                # Can't be bothered to check if this exists
+                pass
+            t = Thread(target=self._processFile, args=(filename,))
+            t.start()
+
+            self.queue = Queue()
+            self.appendEnabled = True
+        else:
+            self.appendEnabled = False
+
+    """
+    Immediately append the event to the output file.
 
     event:  a derivation of the _LogEvent class
     throws: ValueError if one of the mandatory attributes is not assigned
     """
     def append(self, event):
+        if not self.appendEnabled:
+            raise ValueError("Append mode is not configured.")
+
+        element = event._getElement()
+
+        raw = ET.tostring(element)
+        parsed = minidom.parseString(raw)
+        pretty = parsed.toprettyxml(indent="   ")
+        to_remove = pretty.find("\n") + 1 # Strip of version info line
+        final = pretty[to_remove:-1]
+
+        self.queue.put(final)
+
+    """
+    Store the event in memory for output later.
+
+    event:  a derivation of the _LogEvent class
+    throws: ValueError if one of the mandatory attributes is not assigned
+    """
+    def store(self, event):
         element = event._getElement()
         self._elements.append(element)
 

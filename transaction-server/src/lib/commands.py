@@ -9,7 +9,7 @@ QUOTE_LIFESPAN = 60.0 # period of time a quote is valid for (will be 60.0 for de
 accounts = []
 cached_quotes = {}
 
-XMLTree = LogBuilder()
+XMLTree = LogBuilder("/out/testLOG")
 
 def add(transaction_num, user_id, amount, cursor, conn):
     command = UserCommand()
@@ -1137,9 +1137,10 @@ def dumplog(transaction_num, filename):
     }
     command.updateAll(**attributes)
     XMLTree.append(command)
-    
-    time.sleep(30) # hack - fix me
-    XMLTree.write(filename)
+
+    # todo: verify if this can be removed - Daniel
+    #time.sleep(30) # hack - fix me
+    #XMLTree.write(filename)
 
 def dumplog_user(transaction_num, user_id, filename):
     command = UserCommand()
@@ -1153,8 +1154,9 @@ def dumplog_user(transaction_num, user_id, filename):
     command.updateAll(**attributes)
     XMLTree.append(command)
 
-    time.sleep(30) # hack - fix me
-    XMLTree.writeFiltered(filename, user_id)
+    # This basically won't work at all atm - Daniel
+    #time.sleep(30) # hack - fix me
+    #XMLTree.writeFiltered(filename, user_id)
 
 
 def display_summary(transaction_num, user_id):
