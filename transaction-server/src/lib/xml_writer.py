@@ -278,6 +278,7 @@ class LogBuilder:
     def __init__(self, filename=None):
         self._elements = []
         if filename:
+            self.queue = Queue()
             try:
                 os.remove(filename)
             except:
@@ -286,7 +287,6 @@ class LogBuilder:
             t = Thread(target=self._processFile, args=(filename,))
             t.start()
 
-            self.queue = Queue()
             self.appendEnabled = True
         else:
             self.appendEnabled = False
