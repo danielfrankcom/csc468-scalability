@@ -170,7 +170,7 @@ def process():
         transaction = transactions.get()
         print("Received: " + transaction)
 
-        match = re.findall(pattern, raw)
+        match = re.findall(pattern, transaction)
         if not match:
             continue
 
@@ -189,7 +189,7 @@ def process():
                 "timestamp": int(time.time() * 1000),
                 "server": "DDJK",
                 "transactionNum": transactionNum,
-                "username": user_id
+                "username": user_id,
                 "errorMessage": "Improperly formed command"
             }
             error.updateAll(**attributes)
