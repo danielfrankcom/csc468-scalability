@@ -7,6 +7,7 @@ from threading import Thread
 import time
 import psycopg2
 from psycopg2 import pool
+from lib.xml_writer import *
 
 pattern = re.compile(r"^\[(\d+)\] ([A-Z_]+),([^ ]+) ?$")
 
