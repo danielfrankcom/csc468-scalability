@@ -249,6 +249,8 @@ through the use of the #append(event) method.
 """
 class LogBuilder:
 
+    queue = Queue()
+
     """
     Continuously read from the queue and append to a file.
 
@@ -259,11 +261,11 @@ class LogBuilder:
         f = open(filename, "w+")
         
         while (True):
-            item = self.queue.get()
+            item = LogBuilder.queue.get()
 
             if "DUMPLOG" in item:
-                if not self.queue.empty():
-                    self.queue.put(item)
+                if not LogBuilder.queue.empty():
+                    LogBuilder.queue.put(item)
                     continue
                 else:
                     f.write(item)
@@ -277,13 +279,14 @@ class LogBuilder:
     """
     def __init__(self, filename=None):
         self._elements = []
+
         if filename:
-            self.queue = Queue()
             try:
                 os.remove(filename)
             except:
                 # Can't be bothered to check if this exists
                 pass
+
             t = Thread(target=self._processFile, args=(filename,))
             t.start()
 
@@ -309,7 +312,7 @@ class LogBuilder:
         to_remove = pretty.find("\n") + 1 # Strip of version info line
         final = pretty[to_remove:-1]
 
-        self.queue.put(final)
+        LogBuilder.queue.put(final)
 
     """
     Store the event in memory for output later.
