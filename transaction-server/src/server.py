@@ -190,10 +190,11 @@ def process():
                 "server": "DDJK",
                 "transactionNum": transactionNum,
                 "username": user_id,
+                "command": transaction,
                 "errorMessage": "Improperly formed command"
             }
             error.updateAll(**attributes)
-            XMLTree.append(error)
+            #XMLTree.append(error)
 
         print("Processed!")
         pool.putconn(conn)
