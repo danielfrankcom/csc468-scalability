@@ -8,32 +8,10 @@ services:
             - POSTGRES_PASSWORD=${DB_PASS}
         volumes:
             - ./database:/docker-entrypoint-initdb.d/:ro
-    adminer:
-        image: michalhosna/adminer:4.7.0
-        depends_on:
-            - postgres
-        restart: on-failure
-        ports:
-            - ${ADMINER_PORT}:8080
-        environment:
-            - ADMINER_DRIVER=pgsql
-            - ADMINER_DB=postgres
-            - ADMINER_SERVER=postgres
-            - ADMINER_USERNAME=${DB_USER}
-            - ADMINER_PASSWORD=${DB_PASS}
-            - ADMINER_AUTOLOGIN=1
-    quote-cache:
-        build: quote-cache
-        restart: always
-        ports:
-            - 4444:4444
-        expose:
-            - 6000
     transaction-server:
         build: transaction-server
         depends_on:
             - postgres
-            - quote-cache
         restart: unless-stopped
         ports:
             - ${TRANSACTION_PORT}:5000
@@ -41,20 +19,3 @@ services:
             - ./transaction-server/out:/out:rw
         environment:
             - PYTHONUNBUFFERED=TRUE
-    workload-generator:
-        build: workload-generator
-        restart: on-failure
-        depends_on:
-            - transaction-server
-        volumes:
-            - ./workloads:/workloads:ro
-        stdin_open: true
-        tty: true
-    webserver:
-        image: nginx:1.14
-        restart: on-failure
-        ports:
-            - ${WEB_SERVER_PORT}:80
-        volumes:
-            - ./webserver/nginx.conf:/etc/nginx/nginx.conf:ro
-            - ./webserver/html:/usr/share/nginx/html:ro
