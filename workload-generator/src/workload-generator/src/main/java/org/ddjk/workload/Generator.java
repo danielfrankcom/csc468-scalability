@@ -32,7 +32,7 @@ public class Generator {
     };
 
     private static final String URL_PRE = "http://";
-    private static final String URL_POST = ":" + PORT;
+    private static final String URL_POST = ":" + PORT + "/api";
 
     public static void main(String args[]) {
 

@@ -203,7 +203,7 @@ for i in range(WORKERS):
     t = Thread(target=process)
     t.start()
 
-@app.route('/', methods=['POST'])
+@app.route('/api', methods=['POST'])
 def root():
 
     body = request.data.decode('utf-8')
