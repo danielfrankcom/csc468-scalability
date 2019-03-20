@@ -1,0 +1,46 @@
+#! /bin/bash
+
+# Exit early if invalid arguments provided.
+if [[ $# -ne 1 ]]
+then
+    echo "Exactly 1 argument expected: original xml file."
+    exit 1
+fi
+
+XML_PATH=$(realpath "$1")
+
+TAG="log"
+PREPEND="<$TAG>"
+APPEND="</$TAG>"
+
+LAST_TRANSACTION_NUM=$(
+	cat "$XML_PATH" | \
+        grep "<transactionNum>" | \
+        grep -oE [0-9]+ | \
+        sort -V | \
+        uniq | \
+	tail -1
+)
+
+NEW_TRANSACTION_NUM=$(($LAST_TRANSACTION_NUM + 1))
+
+LAST_TIMESTAMP=$(
+	cat "$XML_PATH" | \
+	grep "<timestamp>" | \
+       	grep -oE [0-9]+ | \
+	sort | \
+	tail -1
+)
+
+NEW_TIMESTAMP=$(($LAST_TIMESTAMP + 2))
+
+sed -i "1s;^;$PREPEND\n;" "$XML_PATH"
+
+echo "<userCommand>
+   <timestamp>$NEW_TIMESTAMP</timestamp>
+   <server>DDJK</server>
+   <transactionNum>$NEW_TRANSACTION_NUM</transactionNum>
+   <command>DUMPLOG</command>
+</userCommand>" >> "$XML_PATH"
+
+echo "$APPEND" >> "$XML_PATH"
