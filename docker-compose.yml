@@ -27,8 +27,7 @@ services:
         restart: always
         ports:
             - 4444:4444
-        expose:
-            - 6000
+            - 6000:6000
     transaction-server:
         build: transaction-server
         depends_on:

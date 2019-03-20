@@ -84,7 +84,11 @@ public class Generator {
 
         for (i = 0; i < numRequests - 1; i++) {
 	    final String body = iterator.next();
-	    final String username = body.split(",")[1];
+	    final String username = body
+		    .split(",")[1]
+		    .replace("\n", "")
+		    .replace("\r", "")
+		    .replace(" ", "");
 
 	    final String host;
 	    if (lookup.containsKey(username)) {
@@ -102,7 +106,7 @@ public class Generator {
 
 	for (String host : ADDRESSES) {
             requests[i++] = Dsl.post(URL_PRE + host + URL_POST)
-                    .setBody("[1000000] DUMPLOG,./testLOG")
+                    .setBody("[1200000] DUMPLOG,./testLOG")
                     .build();
 	}
 
