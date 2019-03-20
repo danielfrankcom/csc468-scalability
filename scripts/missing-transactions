@@ -1,0 +1,43 @@
+#! /bin/bash
+
+# Exit early if invalid arguments provided.
+if [[ $# -ne 1 ]]
+then
+    echo "Exactly 1 argument expected: xml log file."
+    exit 1
+fi
+
+XML_PATH=$(realpath "$1")
+
+TEMP_PATH="/tmp"
+ACTUAL_NUM_PATH="$TEMP_PATH/actual"
+EXPECTED_NUM_PATH="$TEMP_PATH/expected"
+
+# Strip out and sort all transaction numbers in the XML
+# file. We also remove duplicates for comparison against
+# the expected range, and save it to a file.
+cat "$XML_PATH" | \
+	grep "<transactionNum>" | \
+	grep -oE [0-9]+ | \
+	sort -V | \
+	uniq \
+	> "$ACTUAL_NUM_PATH"
+
+# This is used to determine the maximum for the range below.
+LAST_TRANSACTION_NUM=$(tail -1 "$ACTUAL_NUM_PATH")
+
+# We append every number, so delete any existing
+# file first.
+rm -f "$EXPECTED_NUM_PATH"
+
+# Generate all numbers that should be in the range.
+for i in `seq 1 1 $LAST_TRANSACTION_NUM`
+do
+	    echo $i >> "$EXPECTED_NUM_PATH"
+done
+
+# Only output the mismatched line, not extra diff formatting.
+diff \
+	--new-line-format="" \
+	--unchanged-line-format="" \
+       	"$EXPECTED_NUM_PATH" "$ACTUAL_NUM_PATH"
