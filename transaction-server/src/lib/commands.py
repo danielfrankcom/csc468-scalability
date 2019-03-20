@@ -52,7 +52,7 @@ def contact_server(query):
 
         # Connect the socket
         #s.connect(('quoteserve.seng.uvic.ca', 4444))
-        s.connect(('quote-cache', 6000))
+        s.connect(('192.168.1.249', 6000))
 
         # Send the user's query
         s.send(query.encode())
