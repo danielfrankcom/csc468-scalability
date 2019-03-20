@@ -75,7 +75,7 @@ public class Generator {
 
         final Iterator<String> iterator = lines.iterator();
         final int numRequests = lines.size();
-        final Request[] requests = new Request[numRequests + ADDRESSES.length - 1];
+        final Request[] requests = new Request[numRequests - 1];
 
 	final int servers = ADDRESSES.length;
 	final Map<String, String> lookup = new LinkedHashMap<>();
@@ -103,12 +103,6 @@ public class Generator {
                     .setBody(body)
                     .build();
         }
-
-	for (String host : ADDRESSES) {
-            requests[i++] = Dsl.post(URL_PRE + host + URL_POST)
-                    .setBody("[1200000] DUMPLOG,./testLOG")
-                    .build();
-	}
 
         final AsyncHttpClient client = Dsl.asyncHttpClient();
 

@@ -262,17 +262,8 @@ class LogBuilder:
         
         while (True):
             item = LogBuilder.queue.get()
-
-            if "DUMPLOG" in item:
-                if not LogBuilder.queue.empty():
-                    LogBuilder.queue.put(item)
-                    continue
-                else:
-                    f.write(item)
-                    f.close()
-                    break
-            else:
-                f.write(item + "\n")
+            f.write(item + "\n")
+            f.flush()
 
     """
     Initialize the builder.
