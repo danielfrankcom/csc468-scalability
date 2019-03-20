@@ -178,7 +178,7 @@ def process():
 
         try:
             parse(transaction, conn.cursor(), conn)
-        except Exception: 
+        except Exception as e: 
             transactionNum, command, arguments = match[0]
             transactionNum = int(transactionNum)
             arguments = arguments.split(",")
@@ -195,6 +195,9 @@ def process():
             }
             error.updateAll(**attributes)
             #XMLTree.append(error)
+            print("error")
+            print(e)
+            
 
         print("Processed!")
         pool.putconn(conn)
