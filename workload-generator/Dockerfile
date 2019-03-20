@@ -5,7 +5,7 @@ ENV http_proxy=$HTTP_PROXY
 ENV https_proxy=$HTTPS_PROXY
 
 # Install dependencies.
-RUN apk --update add openjdk8
+RUN apk --update add openjdk8 nss
 
 WORKDIR /src
 
