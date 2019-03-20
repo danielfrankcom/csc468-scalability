@@ -2,6 +2,7 @@ import sys, os, re
 from flask import Flask, request, jsonify
 from lib.commands import *
 
+import traceback
 from queue import Queue
 from threading import Thread
 import time
@@ -178,7 +179,7 @@ def process():
 
         try:
             parse(transaction, conn.cursor(), conn)
-        except Exception: 
+        except Exception as e: 
             transactionNum, command, arguments = match[0]
             transactionNum = int(transactionNum)
             arguments = arguments.split(",")
@@ -190,10 +191,13 @@ def process():
                 "server": "DDJK",
                 "transactionNum": transactionNum,
                 "username": user_id,
-                "command": transaction,
+                "command": command,
                 "errorMessage": "Improperly formed command"
             }
             error.updateAll(**attributes)
+            
+            print(e)
+
             #XMLTree.append(error)
 
         print("Processed!")
