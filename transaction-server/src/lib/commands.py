@@ -11,7 +11,9 @@ cached_quotes = {}
 
 XMLTree = LogBuilder("/out/testLOG")
 
-def add(transaction_num, user_id, amount, cursor, conn):
+def add(transaction_num, user_id, amount, conn):
+    cursor = conn.cursor()
+
     command = UserCommand()
     attributes = {
         "timestamp": int(time.time() * 1000), 
@@ -122,7 +124,9 @@ def quote(transaction_num, user_id, stock_symbol):
         
 """
 # Helper function - used to cancel buy orders after they timeout
-def buy_timeout(user_id, stock_symbol, dollar_amount, cursor, conn):
+def buy_timeout(user_id, stock_symbol, dollar_amount, conn):
+    cursor = conn.cursor()
+
     cursor.execute('SELECT * FROM reserved WHERE    '
         'type = %s AND                              '
         'username = %s AND                          '
@@ -160,7 +164,8 @@ def buy_timeout(user_id, stock_symbol, dollar_amount, cursor, conn):
         print('buy order timout - the following buy order is now cancelled: ', 
             user_id, stock_symbol, dollar_amount)
 
-def buy(transaction_num, user_id, stock_symbol, amount, cursor, conn):
+def buy(transaction_num, user_id, stock_symbol, amount, conn):
+    cursor = conn.cursor()
     
     command = UserCommand()
     attributes = {
@@ -231,10 +236,12 @@ def buy(transaction_num, user_id, stock_symbol, amount, cursor, conn):
     transaction.updateAll(**attributes)
     XMLTree.append(transaction)
 
-    #threading.Timer(QUOTE_LIFESPAN, buy_timeout, args=(user_id, stock_symbol, amount, cursor, conn)).start()
+    #threading.Timer(QUOTE_LIFESPAN, buy_timeout, args=(user_id, stock_symbol, amount, conn)).start()
 
 
-def commit_buy(transaction_num, user_id, cursor, conn):
+def commit_buy(transaction_num, user_id, conn):
+    cursor = conn.cursor()
+
     cursor.execute('SELECT * FROM reserved WHERE type = %s AND username = %s AND timestamp > %s;', ('buy', user_id, round(time.time(), 5)-60))
     conn.commit()
 
@@ -313,7 +320,9 @@ def commit_buy(transaction_num, user_id, cursor, conn):
         conn.rollback()
         pass
 
-def cancel_buy(transaction_num, user_id, cursor, conn):
+def cancel_buy(transaction_num, user_id, conn):
+    cursor = conn.cursor()
+
     cursor.execute('SELECT reservationid, amount FROM reserved WHERE type = %s AND username = %s AND timestamp = (SELECT MAX(timestamp) FROM reserved WHERE type = %s AND username = %s);', ('buy', user_id, 'buy', user_id))
     conn.commit()
 
@@ -377,7 +386,9 @@ def cancel_buy(transaction_num, user_id, cursor, conn):
     conn.commit()
     return 
 
-def sell(transaction_num, user_id, stock_symbol, amount, cursor, conn):
+def sell(transaction_num, user_id, stock_symbol, amount, conn):
+    cursor = conn.cursor()
+
     cursor.execute('SELECT username FROM users;')
     conn.commit()
     
@@ -422,7 +433,7 @@ def sell(transaction_num, user_id, stock_symbol, amount, cursor, conn):
                     conn.commit() 
 
                     # create timer, when timer finishes have it cancel the buy
-                    #threading.Timer(QUOTE_LIFESPAN, buy_timeout, args=(user_id, stock_symbol, amount, cursor, conn)).start()
+                    #threading.Timer(QUOTE_LIFESPAN, buy_timeout, args=(user_id, stock_symbol, amount, conn)).start()
                 else:
                     error = ErrorEvent()
                     attributes = {
@@ -463,7 +474,9 @@ def sell(transaction_num, user_id, stock_symbol, amount, cursor, conn):
     XMLTree.append(error)
     return
 
-def commit_sell(transaction_num, user_id, cursor, conn):
+def commit_sell(transaction_num, user_id, conn):
+    cursor = conn.cursor()
+
     cursor.execute('SELECT * FROM reserved WHERE type = %s AND username = %s AND timestamp > %s;', ('sell', user_id, round(time.time(), 5)-60))
     conn.commit()
 
@@ -538,7 +551,9 @@ def commit_sell(transaction_num, user_id, cursor, conn):
         conn.rollback()
         pass
 
-def cancel_sell(transaction_num, user_id, cursor, conn):
+def cancel_sell(transaction_num, user_id, conn):
+    cursor = conn.cursor()
+
     cursor.execute('SELECT reservationid, stock_symbol, stock_quantity FROM reserved WHERE type = %s AND username = %s AND timestamp = (SELECT MAX(timestamp) FROM reserved WHERE type = %s AND username = %s);', ('sell', user_id, 'sell', user_id))
     conn.commit()
 
@@ -583,7 +598,9 @@ def cancel_sell(transaction_num, user_id, cursor, conn):
 
 # set_buy_amount allows a user to set a dollar amount of stock to buy.  This must be followed
 # by set_buy_trigger() before the trigger goes 'live'. 
-def set_buy_amount(transaction_num, user_id, stock_symbol, amount, cursor, conn):
+def set_buy_amount(transaction_num, user_id, stock_symbol, amount, conn):
+    cursor = conn.cursor()
+
     amount = float(amount)
 
     command = UserCommand()
@@ -693,7 +710,8 @@ def set_buy_amount(transaction_num, user_id, stock_symbol, amount, cursor, conn)
         conn.commit()
     return
 
-def cancel_set_buy(transaction_num, user_id, stock_symbol, cursor, conn):
+def cancel_set_buy(transaction_num, user_id, stock_symbol, conn):
+    cursor = conn.cursor()
     
     command = UserCommand()
     attributes = {
@@ -760,7 +778,8 @@ def cancel_set_buy(transaction_num, user_id, stock_symbol, cursor, conn):
 
     return 
 
-def set_buy_trigger(transaction_num, user_id, stock_symbol, amount, cursor, conn):
+def set_buy_trigger(transaction_num, user_id, stock_symbol, amount, conn):
+    cursor = conn.cursor()
     
     command = UserCommand()
     attributes = {
@@ -814,7 +833,8 @@ def set_buy_trigger(transaction_num, user_id, stock_symbol, amount, cursor, conn
 #      determining whether user owns enough stock to create set_sell order
 #   Also, it is now apparent this logic needs to change.  amount is a dollar amount, this has 
 #   been written under the assumption that it is a number of stock
-def set_sell_amount(transaction_num, user_id, stock_symbol, amount, cursor, conn):
+def set_sell_amount(transaction_num, user_id, stock_symbol, amount, conn):
+    cursor = conn.cursor()
     
     command = UserCommand()
     attributes = {
@@ -906,7 +926,8 @@ def set_sell_amount(transaction_num, user_id, stock_symbol, amount, cursor, conn
         conn.commit()
     return
 
-def set_sell_trigger(transaction_num, user_id, stock_symbol, amount, cursor, conn):
+def set_sell_trigger(transaction_num, user_id, stock_symbol, amount, conn):
+    cursor = conn.cursor()
     
     try:
         command = UserCommand()
@@ -958,7 +979,8 @@ def set_sell_trigger(transaction_num, user_id, stock_symbol, amount, cursor, con
         conn.commit()
     return 
 
-def cancel_set_sell(transaction_num, user_id, stock_symbol, cursor, conn):
+def cancel_set_sell(transaction_num, user_id, stock_symbol, conn):
+    cursor = conn.cursor()
     
     command = UserCommand()
     attributes = {
@@ -1012,7 +1034,9 @@ def cancel_set_sell(transaction_num, user_id, stock_symbol, cursor, conn):
 # this method is called by an extra thread.  Every QUOTE_LIFESPAN period of time it goes
 # through the triggers table.  For any row that posesses a trigger_value, a quote is
 # obtained for that stock and if appropriate the buy/sell is triggered
-def trigger_maintainer(cursor, conn):
+def trigger_maintainer(conn):
+    cursor = conn.cursor()
+
     cursor.execute('SELECT * FROM triggers WHERE trigger_amount IS NOT NULL;')
     try:
         results = cursor.fetchall() # NOTE: this will not scale - we may have HUGE numbers of rows later
@@ -1125,7 +1149,7 @@ def trigger_maintainer(cursor, conn):
 
     # recurse, but using another thread.  I'm not sure, but I believe this avoids busy-waiting 
     # even on the new thread.  This needs more looking into to be sure if it's optimal
-    #threading.Timer(QUOTE_LIFESPAN, trigger_maintainer, args=(cursor, conn)).start()
+    #threading.Timer(QUOTE_LIFESPAN, trigger_maintainer, args=(conn)).start()
 
 def dumplog(transaction_num, filename):
     command = UserCommand()
@@ -1173,11 +1197,12 @@ def display_summary(transaction_num, user_id):
 
 
 def main():
-    cursor, conn = initdb()
+    # This will no longer work...
+    conn = initdb()
 
     # THIS HAS BEEN MOVED TO initdb()
     #start the trigger maintainer thread
-#    threading.Timer(QUOTE_LIFESPAN, trigger_maintainer, args=(cursor, conn)).start()
+#    threading.Timer(QUOTE_LIFESPAN, trigger_maintainer, args=(conn)).start()
 
     while True:
         var = input("Enter a command: ")
@@ -1189,7 +1214,7 @@ def main():
             except ValueError:
                 print("Invalid Input. <ADD, USER_ID, AMOUNT>")
             else:    
-                add(user_id, amount, cursor, conn)
+                add(user_id, amount, conn)
         #BUY Command
         elif command == "BUY":
             try:
@@ -1197,84 +1222,84 @@ def main():
             except ValueError:
                 print("Invalid Input. <BUY USER_ID STOCK_SYMBOL AMOUNT>")
             else:    
-                buy(user_id, stock_symbol, amount, cursor, conn)
+                buy(user_id, stock_symbol, amount, conn)
         elif command == "COMMIT_BUY":
             try:
                 command, user_id = var.split()
             except ValueError:
                 print("Invalid Input. <COMMIT_BUY USER_ID>")
             else:    
-                commit_buy(user_id, cursor, conn)
+                commit_buy(user_id, conn)
         elif command == "CANCEL_BUY":
             try:
                 command, user_id = var.split()
             except ValueError:
                 print("Invalid Input. <CANCEL_BUY USER_ID>")
             else:    
-                cancel_buy(user_id, cursor, conn)
+                cancel_buy(user_id, conn)
         elif command == "SELL":
             try:
                 command, user_id, stock_symbol, amount = var.split()
             except ValueError:
                 print("Invalid Input. <SELL USER_ID STOCK_SYMBOL AMOUNT>")
             else:    
-                sell(user_id, stock_symbol, amount, cursor, conn)
+                sell(user_id, stock_symbol, amount, conn)
         elif command == "COMMIT_SELL":
             try:
                 command, user_id = var.split()
             except ValueError:
                 print("Invalid Input. <COMMIT_SELL USER_ID>")
             else:    
-                commit_sell(user_id, cursor, conn)
+                commit_sell(user_id, conn)
         elif command == "SET_BUY_AMOUNT":
             try:
                 command, user_id, stock_symbol, amount = var.split()
             except ValueError:
                 print("Invalid input.  <SET_BUY_AMOUNT USER_ID STOCK_SYMBOL AMOUNT>")
             else:
-                set_buy_amount(user_id, stock_symbol, amount, cursor, conn)
+                set_buy_amount(user_id, stock_symbol, amount, conn)
         elif command == "CANCEL_SET_BUY":
             try:
                 command, user_id, stock_symbol = var.split()
             except ValueError:
                 print("Invalid input.  <CANCEL_SET_BUY USER_ID STOCK_SYMBOL>")
             else:
-                cancel_set_buy(user_id, stock_symbol, cursor, conn)
+                cancel_set_buy(user_id, stock_symbol, conn)
         elif command == "SET_BUY_TRIGGER":
             try:
                 command, user_id, symbol, amount = var.split()
             except ValueError:
                 print("Invalid input. <SET_BUY_TRIGGER USER_ID STOCK_SYMBOL AMOUNT>")
             else:
-                set_buy_trigger(user_id, symbol, amount, cursor, conn)
+                set_buy_trigger(user_id, symbol, amount, conn)
         elif command == "SET_SELL_AMOUNT":
             try:
                 command, user_id, stock_symbol, amount = var.split()
             except ValueError:
                 print("Invalid input.  <SET_SELL_AMOUNT USER_ID STOCK_SYMBOL AMOUNT>")
             else:
-                set_sell_amount(user_id, stock_symbol, amount, cursor, conn)
+                set_sell_amount(user_id, stock_symbol, amount, conn)
         elif command == "CANCEL_SET_SELL":
             try:
                 command, user_id, stock_symbol = var.split()
             except ValueError:
                 print("Invalid input.  <CANCEL_SET_SELL USER_ID STOCK_SYMBOL>")
             else:
-                cancel_set_sell(user_id, stock_symbol, cursor, conn)
+                cancel_set_sell(user_id, stock_symbol, conn)
         elif command == "SET_SELL_TRIGGER":
             try:
                 command, user_id, symbol, amount = var.split()
             except ValueError:
                 print("Invalid input. <SET_SELL_TRIGGER USER_ID STOCK_SYMBOL AMOUNT>")
             else:
-                set_sell_trigger(user_id, symbol, amount, cursor, conn)
+                set_sell_trigger(user_id, symbol, amount, conn)
         elif command == "CANCEL_SELL":
             try:
                 command, user_id = var.split()
             except ValueError:
                 print("Invalid Input. <COMMIT_SELL USER_ID>")
             else:    
-                cancel_sell(user_id, cursor, conn)        
+                cancel_sell(user_id, conn)        
         elif command == "DUMPLOG":
             try:
                 command, user_id, filename = var.split()

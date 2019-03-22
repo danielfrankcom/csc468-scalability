@@ -15,7 +15,7 @@ pattern = re.compile(r"^\[(\d+)\] ([A-Z_]+),([^ ]+) ?$")
 """
 Provides a method to call with parameters.
 """
-def parse(raw, cursor, conn):
+def parse(raw, conn):
 
     match = re.findall(pattern, raw)
 
@@ -43,7 +43,7 @@ def parse(raw, cursor, conn):
         except ValueError:
             print("Invalid Input. <ADD, USER_ID, AMOUNT>")
         else:    
-            add(transactionNum, user_id, amount, cursor, conn)
+            add(transactionNum, user_id, amount, conn)
     #BUY Command
     elif command == "BUY":
         try:
@@ -51,84 +51,84 @@ def parse(raw, cursor, conn):
         except ValueError:
             print("Invalid Input. <BUY USER_ID STOCK_SYMBOL AMOUNT>")
         else:    
-            buy(transactionNum, user_id, stock_symbol, amount, cursor, conn)
+            buy(transactionNum, user_id, stock_symbol, amount, conn)
     elif command == "COMMIT_BUY":
         try:
             [user_id] = arguments
         except ValueError:
             print("Invalid Input. <COMMIT_BUY USER_ID>")
         else:    
-            commit_buy(transactionNum, user_id, cursor, conn)
+            commit_buy(transactionNum, user_id, conn)
     elif command == "CANCEL_BUY":
         try:
             [user_id] = arguments
         except ValueError:
             print("Invalid Input. <CANCEL_BUY USER_ID>")
         else:    
-            cancel_buy(transactionNum, user_id, cursor, conn)
+            cancel_buy(transactionNum, user_id, conn)
     elif command == "SELL":
         try:
             user_id, stock_symbol, amount = arguments
         except ValueError:
             print("Invalid Input. <SELL USER_ID STOCK_SYMBOL AMOUNT>")
         else:    
-            sell(transactionNum, user_id, stock_symbol, amount, cursor, conn)
+            sell(transactionNum, user_id, stock_symbol, amount, conn)
     elif command == "COMMIT_SELL":
         try:
             [user_id] = arguments
         except ValueError:
             print("Invalid Input. <COMMIT_SELL USER_ID>")
         else:    
-            commit_sell(transactionNum, user_id, cursor, conn)
+            commit_sell(transactionNum, user_id, conn)
     elif command == "SET_BUY_AMOUNT":
         try:
             user_id, stock_symbol, amount = arguments
         except ValueError:
             print("Invalid input.  <SET_BUY_AMOUNT USER_ID STOCK_SYMBOL AMOUNT>")
         else:
-            set_buy_amount(transactionNum, user_id, stock_symbol, amount, cursor, conn)
+            set_buy_amount(transactionNum, user_id, stock_symbol, amount, conn)
     elif command == "CANCEL_SET_BUY":
         try:
             user_id, stock_symbol = arguments
         except ValueError:
             print("Invalid input.  <CANCEL_SET_BUY USER_ID STOCK_SYMBOL>")
         else:
-            cancel_set_buy(transactionNum, user_id, stock_symbol, cursor, conn)
+            cancel_set_buy(transactionNum, user_id, stock_symbol, conn)
     elif command == "SET_BUY_TRIGGER":
         try:
             user_id, symbol, amount = arguments
         except ValueError:
             print("Invalid input. <SET_BUY_TRIGGER USER_ID STOCK_SYMBOL AMOUNT>")
         else:
-            set_buy_trigger(transactionNum, user_id, symbol, amount, cursor, conn)
+            set_buy_trigger(transactionNum, user_id, symbol, amount, conn)
     elif command == "SET_SELL_AMOUNT":
         try:
             user_id, stock_symbol, amount = arguments
         except ValueError:
             print("Invalid input.  <SET_SELL_AMOUNT USER_ID STOCK_SYMBOL AMOUNT>")
         else:
-            set_sell_amount(transactionNum, user_id, stock_symbol, amount, cursor, conn)
+            set_sell_amount(transactionNum, user_id, stock_symbol, amount, conn)
     elif command == "CANCEL_SET_SELL":
         try:
             user_id, stock_symbol = arguments
         except ValueError:
             print("Invalid input.  <CANCEL_SET_SELL USER_ID STOCK_SYMBOL>")
         else:
-            cancel_set_sell(transactionNum, user_id, stock_symbol, cursor, conn)
+            cancel_set_sell(transactionNum, user_id, stock_symbol, conn)
     elif command == "CANCEL_SELL":
         try:
             [user_id] = arguments
         except ValueError:
             print("Invalid Input. <COMMIT_SELL USER_ID>")
         else:    
-            cancel_sell(transactionNum, user_id, cursor, conn) 
+            cancel_sell(transactionNum, user_id, conn) 
     elif command == "SET_SELL_TRIGGER":
         try:
             user_id, symbol, amount = arguments
         except ValueError:
             print("Invalid input. <SET_SELL_TRIGGER USER_ID STOCK_SYMBOL AMOUNT>")
         else:
-            set_sell_trigger(transactionNum, user_id, symbol, amount, cursor, conn)
+            set_sell_trigger(transactionNum, user_id, symbol, amount, conn)
     elif command == "DUMPLOG":
         try:
             [location] = arguments
