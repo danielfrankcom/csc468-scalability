@@ -9,9 +9,7 @@ QUOTE_LIFESPAN = 60.0 # period of time a quote is valid for (will be 60.0 for de
 accounts = []
 cached_quotes = {}
 
-XMLTree = LogBuilder("/out/testLOG")
-
-def add(transaction_num, user_id, amount, conn):
+def add(transaction_num, user_id, amount, conn, XMLTree):
     cursor = conn.cursor()
 
     command = UserCommand()
@@ -88,7 +86,7 @@ def get_quote(user_id, stock_symbol):
 # stock as requested, but this value will either come from cached_quotes or from q hit
 # to the quote server directly.  In the case of the latter, the new quote will be put
 # in the cached_quotes dictionary
-def quote(transaction_num, user_id, stock_symbol):
+def quote(transaction_num, user_id, stock_symbol, XMLTree):
     # if not stock_symbol in cached_quotes.keys() or ((time.time() - cached_quotes[stock_symbol][1]) > QUOTE_LIFESPAN):
     # get quote from server
     new_price, time_of_quote, cryptokey, quote_user = get_quote(user_id, stock_symbol)
@@ -124,7 +122,7 @@ def quote(transaction_num, user_id, stock_symbol):
         
 """
 # Helper function - used to cancel buy orders after they timeout
-def buy_timeout(user_id, stock_symbol, dollar_amount, conn):
+def buy_timeout(user_id, stock_symbol, dollar_amount, conn, XMLTree):
     cursor = conn.cursor()
 
     cursor.execute('SELECT * FROM reserved WHERE    '
@@ -164,7 +162,7 @@ def buy_timeout(user_id, stock_symbol, dollar_amount, conn):
         print('buy order timout - the following buy order is now cancelled: ', 
             user_id, stock_symbol, dollar_amount)
 
-def buy(transaction_num, user_id, stock_symbol, amount, conn):
+def buy(transaction_num, user_id, stock_symbol, amount, conn, XMLTree):
     cursor = conn.cursor()
     
     command = UserCommand()
@@ -180,7 +178,7 @@ def buy(transaction_num, user_id, stock_symbol, amount, conn):
     command.updateAll(**attributes)
     XMLTree.append(command)
     
-    price, stock_symbol, user_id, time_of_quote, cryptokey = quote(transaction_num, user_id, stock_symbol)
+    price, stock_symbol, user_id, time_of_quote, cryptokey = quote(transaction_num, user_id, stock_symbol, XMLTree)
     # Debugging print - feel free to delete this (Dusty)
     print("in BUY.  List of data from quote:", 
         "Price:", price,
@@ -239,7 +237,7 @@ def buy(transaction_num, user_id, stock_symbol, amount, conn):
     #threading.Timer(QUOTE_LIFESPAN, buy_timeout, args=(user_id, stock_symbol, amount, conn)).start()
 
 
-def commit_buy(transaction_num, user_id, conn):
+def commit_buy(transaction_num, user_id, conn, XMLTree):
     cursor = conn.cursor()
 
     cursor.execute('SELECT * FROM reserved WHERE type = %s AND username = %s AND timestamp > %s;', ('buy', user_id, round(time.time(), 5)-60))
@@ -320,7 +318,7 @@ def commit_buy(transaction_num, user_id, conn):
         conn.rollback()
         pass
 
-def cancel_buy(transaction_num, user_id, conn):
+def cancel_buy(transaction_num, user_id, conn, XMLTree):
     cursor = conn.cursor()
 
     cursor.execute('SELECT reservationid, amount FROM reserved WHERE type = %s AND username = %s AND timestamp = (SELECT MAX(timestamp) FROM reserved WHERE type = %s AND username = %s);', ('buy', user_id, 'buy', user_id))
@@ -386,7 +384,7 @@ def cancel_buy(transaction_num, user_id, conn):
     conn.commit()
     return 
 
-def sell(transaction_num, user_id, stock_symbol, amount, conn):
+def sell(transaction_num, user_id, stock_symbol, amount, conn, XMLTree):
     cursor = conn.cursor()
 
     cursor.execute('SELECT username FROM users;')
@@ -405,7 +403,7 @@ def sell(transaction_num, user_id, stock_symbol, amount, conn):
     command.updateAll(**attributes)
     XMLTree.append(command)
 
-    price, stock_symbol, user_id, time_of_quote, cryptokey = quote(transaction_num, user_id, stock_symbol)
+    price, stock_symbol, user_id, time_of_quote, cryptokey = quote(transaction_num, user_id, stock_symbol, XMLTree)
 
     try:
         test = cursor.fetchall()
@@ -474,7 +472,7 @@ def sell(transaction_num, user_id, stock_symbol, amount, conn):
     XMLTree.append(error)
     return
 
-def commit_sell(transaction_num, user_id, conn):
+def commit_sell(transaction_num, user_id, conn, XMLTree):
     cursor = conn.cursor()
 
     cursor.execute('SELECT * FROM reserved WHERE type = %s AND username = %s AND timestamp > %s;', ('sell', user_id, round(time.time(), 5)-60))
@@ -551,7 +549,7 @@ def commit_sell(transaction_num, user_id, conn):
         conn.rollback()
         pass
 
-def cancel_sell(transaction_num, user_id, conn):
+def cancel_sell(transaction_num, user_id, conn, XMLTree):
     cursor = conn.cursor()
 
     cursor.execute('SELECT reservationid, stock_symbol, stock_quantity FROM reserved WHERE type = %s AND username = %s AND timestamp = (SELECT MAX(timestamp) FROM reserved WHERE type = %s AND username = %s);', ('sell', user_id, 'sell', user_id))
@@ -598,7 +596,7 @@ def cancel_sell(transaction_num, user_id, conn):
 
 # set_buy_amount allows a user to set a dollar amount of stock to buy.  This must be followed
 # by set_buy_trigger() before the trigger goes 'live'. 
-def set_buy_amount(transaction_num, user_id, stock_symbol, amount, conn):
+def set_buy_amount(transaction_num, user_id, stock_symbol, amount, conn, XMLTree):
     cursor = conn.cursor()
 
     amount = float(amount)
@@ -710,7 +708,7 @@ def set_buy_amount(transaction_num, user_id, stock_symbol, amount, conn):
         conn.commit()
     return
 
-def cancel_set_buy(transaction_num, user_id, stock_symbol, conn):
+def cancel_set_buy(transaction_num, user_id, stock_symbol, conn, XMLTree):
     cursor = conn.cursor()
     
     command = UserCommand()
@@ -778,7 +776,7 @@ def cancel_set_buy(transaction_num, user_id, stock_symbol, conn):
 
     return 
 
-def set_buy_trigger(transaction_num, user_id, stock_symbol, amount, conn):
+def set_buy_trigger(transaction_num, user_id, stock_symbol, amount, conn, XMLTree):
     cursor = conn.cursor()
     
     command = UserCommand()
@@ -833,7 +831,7 @@ def set_buy_trigger(transaction_num, user_id, stock_symbol, amount, conn):
 #      determining whether user owns enough stock to create set_sell order
 #   Also, it is now apparent this logic needs to change.  amount is a dollar amount, this has 
 #   been written under the assumption that it is a number of stock
-def set_sell_amount(transaction_num, user_id, stock_symbol, amount, conn):
+def set_sell_amount(transaction_num, user_id, stock_symbol, amount, conn, XMLTree):
     cursor = conn.cursor()
     
     command = UserCommand()
@@ -926,7 +924,7 @@ def set_sell_amount(transaction_num, user_id, stock_symbol, amount, conn):
         conn.commit()
     return
 
-def set_sell_trigger(transaction_num, user_id, stock_symbol, amount, conn):
+def set_sell_trigger(transaction_num, user_id, stock_symbol, amount, conn, XMLTree):
     cursor = conn.cursor()
     
     try:
@@ -979,7 +977,7 @@ def set_sell_trigger(transaction_num, user_id, stock_symbol, amount, conn):
         conn.commit()
     return 
 
-def cancel_set_sell(transaction_num, user_id, stock_symbol, conn):
+def cancel_set_sell(transaction_num, user_id, stock_symbol, conn, XMLTree):
     cursor = conn.cursor()
     
     command = UserCommand()
@@ -1034,7 +1032,7 @@ def cancel_set_sell(transaction_num, user_id, stock_symbol, conn):
 # this method is called by an extra thread.  Every QUOTE_LIFESPAN period of time it goes
 # through the triggers table.  For any row that posesses a trigger_value, a quote is
 # obtained for that stock and if appropriate the buy/sell is triggered
-def trigger_maintainer(conn):
+def trigger_maintainer(conn, XMLTree):
     cursor = conn.cursor()
 
     cursor.execute('SELECT * FROM triggers WHERE trigger_amount IS NOT NULL;')
@@ -1053,7 +1051,7 @@ def trigger_maintainer(conn):
         trigger_amount = row[3]
         transaction_amount = row[4]
         transaction_num= row[5]
-        current_price = quote(transaction_num, user_id, stock_symbol)[0]
+        current_price = quote(transaction_num, user_id, stock_symbol, XMLTree)[0]
 
         # Debugging data
         print("row details: user_id:", user_id, 
@@ -1151,7 +1149,7 @@ def trigger_maintainer(conn):
     # even on the new thread.  This needs more looking into to be sure if it's optimal
     #threading.Timer(QUOTE_LIFESPAN, trigger_maintainer, args=(conn)).start()
 
-def dumplog(transaction_num, filename):
+def dumplog(transaction_num, filename, XMLTree):
     command = UserCommand()
     attributes = {
         "timestamp": int(time.time() * 1000), 
@@ -1166,7 +1164,7 @@ def dumplog(transaction_num, filename):
     #time.sleep(30) # hack - fix me
     #XMLTree.write(filename)
 
-def dumplog_user(transaction_num, user_id, filename):
+def dumplog_user(transaction_num, user_id, filename, XMLTree):
     command = UserCommand()
     attributes = {
         "timestamp": int(time.time() * 1000), 
@@ -1183,7 +1181,7 @@ def dumplog_user(transaction_num, user_id, filename):
     #XMLTree.writeFiltered(filename, user_id)
 
 
-def display_summary(transaction_num, user_id):
+def display_summary(transaction_num, user_id, XMLTree):
     command = UserCommand()
     attributes = {
         "timestamp": int(time.time() * 1000), 

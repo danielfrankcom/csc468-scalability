@@ -8,9 +8,11 @@ import time
 import psycopg2
 from psycopg2 import pool
 from lib.xml_writer import *
+import traceback
 
 pattern = re.compile(r"^\[(\d+)\] ([A-Z_]+),([^ ]+) ?$")
 
+XMLTree = LogBuilder("/out/testLOG")
 
 """
 Provides a method to call with parameters.
@@ -35,7 +37,7 @@ def parse(raw, conn):
         except ValueError:
             print("Invalid Input. <QUOTE user_id stock_symbol>")
         else:    
-            quote(transactionNum, user_id, stock_symbol)
+            quote(transactionNum, user_id, stock_symbol, XMLTree)
     #ADD Command
     elif command == "ADD":
         try:
@@ -43,7 +45,7 @@ def parse(raw, conn):
         except ValueError:
             print("Invalid Input. <ADD, USER_ID, AMOUNT>")
         else:    
-            add(transactionNum, user_id, amount, conn)
+            add(transactionNum, user_id, amount, conn, XMLTree)
     #BUY Command
     elif command == "BUY":
         try:
@@ -51,84 +53,84 @@ def parse(raw, conn):
         except ValueError:
             print("Invalid Input. <BUY USER_ID STOCK_SYMBOL AMOUNT>")
         else:    
-            buy(transactionNum, user_id, stock_symbol, amount, conn)
+            buy(transactionNum, user_id, stock_symbol, amount, conn, XMLTree)
     elif command == "COMMIT_BUY":
         try:
             [user_id] = arguments
         except ValueError:
             print("Invalid Input. <COMMIT_BUY USER_ID>")
         else:    
-            commit_buy(transactionNum, user_id, conn)
+            commit_buy(transactionNum, user_id, conn, XMLTree)
     elif command == "CANCEL_BUY":
         try:
             [user_id] = arguments
         except ValueError:
             print("Invalid Input. <CANCEL_BUY USER_ID>")
         else:    
-            cancel_buy(transactionNum, user_id, conn)
+            cancel_buy(transactionNum, user_id, conn, XMLTree)
     elif command == "SELL":
         try:
             user_id, stock_symbol, amount = arguments
         except ValueError:
             print("Invalid Input. <SELL USER_ID STOCK_SYMBOL AMOUNT>")
         else:    
-            sell(transactionNum, user_id, stock_symbol, amount, conn)
+            sell(transactionNum, user_id, stock_symbol, amount, conn, XMLTree)
     elif command == "COMMIT_SELL":
         try:
             [user_id] = arguments
         except ValueError:
             print("Invalid Input. <COMMIT_SELL USER_ID>")
         else:    
-            commit_sell(transactionNum, user_id, conn)
+            commit_sell(transactionNum, user_id, conn, XMLTree)
     elif command == "SET_BUY_AMOUNT":
         try:
             user_id, stock_symbol, amount = arguments
         except ValueError:
             print("Invalid input.  <SET_BUY_AMOUNT USER_ID STOCK_SYMBOL AMOUNT>")
         else:
-            set_buy_amount(transactionNum, user_id, stock_symbol, amount, conn)
+            set_buy_amount(transactionNum, user_id, stock_symbol, amount, conn, XMLTree)
     elif command == "CANCEL_SET_BUY":
         try:
             user_id, stock_symbol = arguments
         except ValueError:
             print("Invalid input.  <CANCEL_SET_BUY USER_ID STOCK_SYMBOL>")
         else:
-            cancel_set_buy(transactionNum, user_id, stock_symbol, conn)
+            cancel_set_buy(transactionNum, user_id, stock_symbol, conn, XMLTree)
     elif command == "SET_BUY_TRIGGER":
         try:
             user_id, symbol, amount = arguments
         except ValueError:
             print("Invalid input. <SET_BUY_TRIGGER USER_ID STOCK_SYMBOL AMOUNT>")
         else:
-            set_buy_trigger(transactionNum, user_id, symbol, amount, conn)
+            set_buy_trigger(transactionNum, user_id, symbol, amount, conn, XMLTree)
     elif command == "SET_SELL_AMOUNT":
         try:
             user_id, stock_symbol, amount = arguments
         except ValueError:
             print("Invalid input.  <SET_SELL_AMOUNT USER_ID STOCK_SYMBOL AMOUNT>")
         else:
-            set_sell_amount(transactionNum, user_id, stock_symbol, amount, conn)
+            set_sell_amount(transactionNum, user_id, stock_symbol, amount, conn, XMLTree)
     elif command == "CANCEL_SET_SELL":
         try:
             user_id, stock_symbol = arguments
         except ValueError:
             print("Invalid input.  <CANCEL_SET_SELL USER_ID STOCK_SYMBOL>")
         else:
-            cancel_set_sell(transactionNum, user_id, stock_symbol, conn)
+            cancel_set_sell(transactionNum, user_id, stock_symbol, conn, XMLTree)
     elif command == "CANCEL_SELL":
         try:
             [user_id] = arguments
         except ValueError:
             print("Invalid Input. <COMMIT_SELL USER_ID>")
         else:    
-            cancel_sell(transactionNum, user_id, conn) 
+            cancel_sell(transactionNum, user_id, conn, XMLTree)
     elif command == "SET_SELL_TRIGGER":
         try:
             user_id, symbol, amount = arguments
         except ValueError:
             print("Invalid input. <SET_SELL_TRIGGER USER_ID STOCK_SYMBOL AMOUNT>")
         else:
-            set_sell_trigger(transactionNum, user_id, symbol, amount, conn)
+            set_sell_trigger(transactionNum, user_id, symbol, amount, conn, XMLTree)
     elif command == "DUMPLOG":
         try:
             [location] = arguments
@@ -140,18 +142,18 @@ def parse(raw, conn):
             else:
                 filename = os.path.basename(location)
                 path = os.path.join("/out/", filename)
-                dumplog_user(transactionNum, user_id, path)
+                dumplog_user(transactionNum, user_id, path, XMLTree)
         else:
             filename = os.path.basename(location)
             path = os.path.join("/out/", filename)
-            dumplog(transactionNum, path)
+            dumplog(transactionNum, path, XMLTree)
     elif command == "DISPLAY_SUMMARY":
         try:
             [user_id] = arguments
         except ValueError:
             print("Invalid input. <DISPLAY_SUMMARY USER_ID>")
         else:
-            display_summary(transactionNum, user_id)
+            display_summary(transactionNum, user_id, XMLTree)
     else:
         print(arguments, " Invalid Command")
 
@@ -177,27 +179,36 @@ def process():
         conn = pool.getconn()
 
         try:
-            parse(transaction, conn.cursor(), conn)
-        except Exception as e: 
-            transactionNum, command, arguments = match[0]
-            transactionNum = int(transactionNum)
-            arguments = arguments.split(",")
-            user_id = arguments[0]
-            
-            error = ErrorEvent()
-            attributes = {
-                "timestamp": int(time.time() * 1000),
-                "server": "DDJK",
-                "transactionNum": transactionNum,
-                "username": user_id,
-                "command": transaction,
-                "errorMessage": "Improperly formed command"
-            }
-            error.updateAll(**attributes)
-            #XMLTree.append(error)
-            print("error")
-            print(e)
-            
+            parse(transaction, conn)
+        except: 
+
+            print("error being logged")
+            print(traceback.format_exc())
+
+            try:
+                transactionNum, command, arguments = match[0]
+                transactionNum = int(transactionNum)
+                arguments = arguments.split(",")
+                user_id = arguments[0]
+                
+                error = ErrorEvent()
+                attributes = {
+                    "timestamp": int(time.time() * 1000),
+                    "server": "DDJK",
+                    "transactionNum": transactionNum,
+                    "username": user_id,
+                    "command": command,
+                    "errorMessage": "Improperly formed command"
+                }
+                error.updateAll(**attributes)
+                XMLTree.append(error)
+
+                print("error successfully logged")
+
+            except:
+                print("error failed to log")
+                print(traceback.format_exc())
+                pass
 
         print("Processed!")
         pool.putconn(conn)
