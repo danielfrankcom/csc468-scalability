@@ -9,6 +9,9 @@ QUOTE_LIFESPAN = 60.0 # period of time a quote is valid for (will be 60.0 for de
 accounts = []
 cached_quotes = {}
 
+def init(conn, XMLTree):
+    threading.Timer(QUOTE_LIFESPAN, trigger_maintainer, args=(conn, XMLTree)).start()
+
 def add(transaction_num, user_id, amount, conn, XMLTree):
     cursor = conn.cursor()
 
@@ -234,7 +237,7 @@ def buy(transaction_num, user_id, stock_symbol, amount, conn, XMLTree):
     transaction.updateAll(**attributes)
     XMLTree.append(transaction)
 
-    #threading.Timer(QUOTE_LIFESPAN, buy_timeout, args=(user_id, stock_symbol, amount, conn)).start()
+    threading.Timer(QUOTE_LIFESPAN, buy_timeout, args=(user_id, stock_symbol, amount, conn, XMLTree)).start()
 
 
 def commit_buy(transaction_num, user_id, conn, XMLTree):
@@ -431,7 +434,7 @@ def sell(transaction_num, user_id, stock_symbol, amount, conn, XMLTree):
                     conn.commit() 
 
                     # create timer, when timer finishes have it cancel the buy
-                    #threading.Timer(QUOTE_LIFESPAN, buy_timeout, args=(user_id, stock_symbol, amount, conn)).start()
+                    threading.Timer(QUOTE_LIFESPAN, buy_timeout, args=(user_id, stock_symbol, amount, conn, XMLTree)).start()
                 else:
                     error = ErrorEvent()
                     attributes = {
@@ -1147,7 +1150,7 @@ def trigger_maintainer(conn, XMLTree):
 
     # recurse, but using another thread.  I'm not sure, but I believe this avoids busy-waiting 
     # even on the new thread.  This needs more looking into to be sure if it's optimal
-    #threading.Timer(QUOTE_LIFESPAN, trigger_maintainer, args=(conn)).start()
+    threading.Timer(QUOTE_LIFESPAN, trigger_maintainer, args=(conn, XMLTree)).start()
 
 def dumplog(transaction_num, filename, XMLTree):
     command = UserCommand()

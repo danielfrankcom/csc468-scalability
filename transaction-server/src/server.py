@@ -213,6 +213,9 @@ def process():
         print("Processed!")
         pool.putconn(conn)
 
+# Start trigger_maintainer thread in commands.py
+init(pool.getconn(), XMLTree)
+
 for i in range(WORKERS):
     t = Thread(target=process)
     t.start()
