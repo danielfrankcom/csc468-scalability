@@ -18,5 +18,8 @@ ENV FLASK_DEBUG=1
 WORKDIR /src
 COPY ./src /src
 
+# Check source for syntax errors. Will not catch runtime errors.
+RUN find /src -name "*.py" | xargs python3 -m py_compile
+
 # Configure command to run on startup.
 CMD ["flask", "run", "--host=0.0.0.0"]
