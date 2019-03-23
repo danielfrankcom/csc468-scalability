@@ -1,18 +1,33 @@
-import sys, os, re
-from flask import Flask, request, jsonify
-from lib.commands import *
+from timeit import default_timer as timer
+from datetime import timedelta
 
-from queue import Queue
-from threading import Thread
-import time
-import psycopg2
-from psycopg2 import pool
+import lib.commands as commands
 from lib.xml_writer import *
-import traceback
 
-pattern = re.compile(r"^\[(\d+)\] ([A-Z_]+),([^ ]+) ?$")
+from quart import Quart, request, jsonify
+import asyncio
+import uvloop
+import asyncpg
+from concurrent.futures import ProcessPoolExecutor
 
-XMLTree = LogBuilder("/out/testLOG")
+import logging
+import json
+import os, re, time, traceback
+
+
+DB = DB_USER = DB_HOST = "postgres"
+DB_PASSWORD = "supersecure"
+DB_PORT = 5432
+
+PROCESSORS = [
+        (commands.quote, re.compile(r"^\[(\d+)\] QUOTE,([^ ]{10}),([A-Z]{1,3}) ?$")),
+        (commands.add, re.compile(r"^\[(\d+)\] ADD,([^ ]{10}),(\d+\.\d{2}) ?$")),
+        (commands.buy, re.compile(r"^\[(\d+)\] BUY,([^ ]{10}),([A-Z]{1,3}),(\d+\.\d{2}) ?$"))
+]
+
+ERROR_PATTERN = re.compile(r"^\[(\d+)\] ([A-Z_]+),([^ ,]+)")
+
+
 
 """
 Provides a method to call with parameters.
@@ -157,73 +172,162 @@ def parse(raw, conn):
     else:
         print(arguments, " Invalid Command")
 
-app = Flask(__name__)
+class Processor:
 
-WORKERS=80
+    # todo: move to database
+    xml_tree = LogBuilder("/out/testLOG")
 
-time.sleep(10) # hack - fix me
-pool = psycopg2.pool.ThreadedConnectionPool(10, WORKERS, user="postgres", password="supersecure", host="postgres", port="5432", database="postgres")
+    def __init__(self):
+        self.users = dict()
+        logger.info("Processor object created.")
 
-transactions = Queue()
+        # todo: will start timer thread here
 
-def process():
-    
-    while True:
-        transaction = transactions.get()
-        print("Received: " + transaction)
+    def _check_transaction(self, transaction):
+        for function, pattern in PROCESSORS:
+            match = re.match(pattern, transaction)
+            if not match:
+                logger.debug("Pattern %s for transaction %s failed.", pattern, transaction)
+                continue
 
-        match = re.findall(pattern, transaction)
-        if not match:
-            continue
+            groups = match.groups()
+            logger.info("Pattern %s matched %s.", pattern, groups)
+            return (function, groups)
 
-        conn = pool.getconn()
+    async def register_transaction(self, transaction):
+        result = self._check_transaction(transaction)
+        if not result:
+            logger.error("Transaction %s did not match any pattern.", transaction)
+            return False
+
+        function, groups = result
+
+        # todo: dumplog has no user
+        username = groups[1]
+        logger.debug("Username %s found for %s.", username, transaction)
+
+        # If a queue exists for this user then add the transaction
+        # to the queue. If one does not, create it and start an
+        # async worker to process the queue.
+        queue = None
+        if username in self.users:
+            queue = self.users[username]
+            logger.info("Added user %s to existing queue.", username)
+        else:
+            queue = asyncio.Queue()
+            self.users[username] = queue
+            asyncio.create_task(self._handle_user(queue))
+            logger.info("Created new queue (%s) for user %s.", id(queue), username)
+
+        # There is an implicit race condition here that may occur if
+        # 2 requests for the same user attempt to create a queue at
+        # the same time. This would result in 2 queues, and 2 async
+        # workers, only 1 of which would receive the remainder of
+        # the requests. In practice this is not a problem, however
+        # it may be possible that the first 2 requests for a user
+        # are not in the correct order, providing this rare race
+        # condition rears its head.
+
+        # Set up the processing function for running asynchronously.
+        work = lambda settings: function(*groups, **settings)
+        await queue.put((work, transaction))
+        logger.debug("Transaction %s added to queue.", transaction)
+
+        return True
+
+    def _log_error(self, transaction):
 
         try:
-            parse(transaction, conn)
-        except: 
+            match = re.match(ERROR_PATTERN, transaction)
+            if not match:
+                # Incapable of finding even the most basic info
+                # in the transaction, so throw it away.
+                logger.error("Unable to find enough info to log %s.", transaction)
+                return
 
-            print("error being logged")
-            print(traceback.format_exc())
+            transaction_num, command, user_id = match.groups()
+            transaction_num = int(transaction_num)
+            logger.debug("Error information for %s: %s, %s, %s.",
+                    transaction, transaction_num, command, user_id)
+
+            error = ErrorEvent()
+            attributes = {
+                "timestamp": int(time.time() * 1000),
+                "server": "DDJK",
+                "transactionNum": transaction_num,
+                "username": user_id,
+                "command": command,
+                "errorMessage": "Improperly formed command"
+            }
+            error.updateAll(**attributes)
+            self.xml_tree.append(error)
+
+        except:
+            logger.exception("Error logging failed for %s.", transaction)
+
+    async def _handle_user(self, queue):
+        # Each async worker has their own database connection,
+        # as their own actions are synchronous with respect to
+        # transactions by the same user.
+        conn = await asyncpg.connect(
+                database=DB,
+                user=DB_USER,
+                password=DB_PASSWORD,
+                host=DB_HOST,
+                port=DB_PORT
+        )
+        logger.info("Connection opened to DB for queue (%s).", id(queue))
+
+        # In theory creating a new async worker for each user
+        # is not great, as they will never go away. In practice
+        # this is fine for the scope of the project, as they
+        # are not scheduled if they are not active, and our
+        # limitation becomes the memory that they allocate in
+        # a real system. With the amount of users that we are
+        # dealing with, this won't be an issue.
+
+        arguments = {
+                "conn": conn,
+                "xml_tree": self.xml_tree
+        }
+
+        while True:
+            work_item, transaction = await queue.get()
+            start = timer()
+            logger.info("Work retreived for transaction %s.", transaction)
 
             try:
-                transactionNum, command, arguments = match[0]
-                transactionNum = int(transactionNum)
-                arguments = arguments.split(",")
-                user_id = arguments[0]
-                
-                error = ErrorEvent()
-                attributes = {
-                    "timestamp": int(time.time() * 1000),
-                    "server": "DDJK",
-                    "transactionNum": transactionNum,
-                    "username": user_id,
-                    "command": command,
-                    "errorMessage": "Improperly formed command"
-                }
-                error.updateAll(**attributes)
-                XMLTree.append(error)
-
-                print("error successfully logged")
-
+                await work_item(arguments)
+                logger.info("Work item completed for transaction %s.", transaction)
             except:
-                print("error failed to log")
-                print(traceback.format_exc())
-                pass
+                # We log the error (in xml) and continue to limp along, hoping the
+                # issue doesn't occur again. If it does, there's not much we can do.
+                logger.exception("Work item failed for transaction %s.", transaction)
+                self._log_error(transaction)
 
-        print("Processed!")
-        pool.putconn(conn)
+            end = timer()
+            print(timedelta(seconds=end-start))
+                
 
-for i in range(WORKERS):
-    t = Thread(target=process)
-    t.start()
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
+
+#executor = ThreadPoolExecutor(1000)
+asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+
+processor = Processor()
+app = Quart(__name__)
 
 @app.route('/', methods=['POST'])
-def root():
+async def root():
 
-    body = request.data.decode('utf-8')
-    print(body, flush=True)
+    body = await request.data
+    transaction = body.decode()
+    logger.info("Request received with body %s.", transaction)
 
-    transactions.put(body)
+    # Queue up the transaction for processing by an async worker.
+    result = await processor.register_transaction(transaction)
+    logger.info("Request stored with result %s.", result)
 
     response = jsonify(success=True)
     return response

@@ -1,101 +1,61 @@
-import psycopg2
-import socket, sys
-import time, threading, datetime
-import random # used to gen random numbers in get_quote()
+import time, datetime
+import random
 from lib.xml_writer import *
 from itertools import count
 
+import asyncio
+import asyncpg
+import logging
+import os
+
 QUOTE_LIFESPAN = 60.0 # period of time a quote is valid for (will be 60.0 for deployed software)
-accounts = []
-cached_quotes = {}
 
-def add(transaction_num, user_id, amount, conn, XMLTree):
-    cursor = conn.cursor()
+QUOTE_CACHE_HOST = "quote-cache"
+QUOTE_CACHE_PORT = 6000
+QUOTE_SERVER_PRESENT = os.environ['http_proxy']
 
-    command = UserCommand()
-    attributes = {
-        "timestamp": int(time.time() * 1000), 
-        "server": "DDJK",
-        "transactionNum": transaction_num,
-        "command": "ADD",
-        "funds": float(amount)
-    }
-    command.updateAll(**attributes)
-    XMLTree.append(command)
-    
-    function =  "INSERT INTO users (username, balance) " \
-                "VALUES ('{username}', {amount}) " \
-                "ON CONFLICT (username) DO UPDATE " \
-                "SET balance = (users.balance + {amount}) " \
-                "WHERE users.username = '{username}';".format(username=user_id, amount=amount)
-    
-    cursor.execute(function)
-    conn.commit()
-        
-    transaction = AccountTransaction()
-    attributes = {
-        "timestamp": int(time.time() * 1000), 
-        "server": "DDJK",
-        "transactionNum": transaction_num,
-        "action": "add", 
-        "username": user_id,
-        "funds": float(amount)
-    }
-    transaction.updateAll(**attributes)
-    XMLTree.append(transaction)
+logger = logging.getLogger(__name__)
 
-# Contact the actual quote server
-def contact_server(query):
 
-        # Create the socket
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+async def get_quote(user_id, stock_symbol):
+    """Fetch a quote from the quote cache."""
 
-        # Connect the socket
-        #s.connect(('quoteserve.seng.uvic.ca', 4444))
-        s.connect(('quote-cache', 6000))
+    request = "{symbol},{user}\n".format(symbol=stock_symbol, user=user_id)
 
-        # Send the user's query
-        s.send(query.encode())
+    result = None
+    if QUOTE_SERVER_PRESENT:
+        reader, writer = await asyncio.open_connection(QUOTE_CACHE_HOST, QUOTE_CACHE_PORT)
 
-        # Read and print up to 1k of data.
-        data = s.recv(1024).decode().split("\n")[0]
+        writer.write(query.encode())
 
-        # close the connection, and the socket
-        s.close()
+        raw = await reader.recv(1024).decode()
+        result = reader.split("\n")[0]
 
-        return data
+        writer.close()
 
-# Contact a fake server
-def fake_server(query):
-        return "20.01,BAD,usernamehere,1549827515,crytoKEY=123=o"
+        return result
 
-# get_quote() is used to directly acquire a quote from the quote server (eventually)
-# for now, this is a placeholder function, and returns a random value between
-# 1.0 and 10.0. 
-def get_quote(user_id, stock_symbol):
+    else:
+        # This sleep will mock production delays
+        # await asyncio.sleep(2)
+        result = "20.01,BAD,usernamehere,1549827515,crytoKEY=123=o"
 
-        request = "{symbol},{user}\n".format(symbol=stock_symbol, user=user_id)
-
-        data = contact_server(request)
-        #data = fake_server(request)
-
-        price, symbol, username, timestamp, cryptokey = data.split(",")
-        return float(price), int(timestamp), cryptokey, username
+    price, symbol, username, timestamp, cryptokey = result.split(",")
+    return float(price), int(timestamp), cryptokey, username
 
 # quote() is called when a client requests a quote.  It will return a valid price for the
-# stock as requested, but this value will either come from cached_quotes or from q hit
-# to the quote server directly.  In the case of the latter, the new quote will be put
-# in the cached_quotes dictionary
-def quote(transaction_num, user_id, stock_symbol, XMLTree):
-    # if not stock_symbol in cached_quotes.keys() or ((time.time() - cached_quotes[stock_symbol][1]) > QUOTE_LIFESPAN):
-    # get quote from server
-    new_price, time_of_quote, cryptokey, quote_user = get_quote(user_id, stock_symbol)
+# stock as requested.
+async def quote(transaction_num, user_id, stock_symbol, **settings):
+    xml_tree = settings["xml_tree"]
+
+    # get quote from server/cache
+    new_price, time_of_quote, cryptokey, quote_user = await get_quote(user_id, stock_symbol)
 
     quote = QuoteServer()
     attributes = {
         "timestamp": int(time.time() * 1000), 
         "server": "DDJK",
-        "transactionNum": transaction_num,
+        "transactionNum": int(transaction_num),
         "price": new_price, 
         "username": quote_user,
         "stockSymbol": stock_symbol,
@@ -103,9 +63,8 @@ def quote(transaction_num, user_id, stock_symbol, XMLTree):
         "cryptokey": cryptokey
     }
     quote.updateAll(**attributes)
-    XMLTree.append(quote)
+    xml_tree.append(quote)
 
-    # cached_quotes[stock_symbol] = (new_price, time_of_quote)
     return new_price, stock_symbol, user_id, time_of_quote, cryptokey
 
 """ 
@@ -119,10 +78,67 @@ def quote(transaction_num, user_id, stock_symbol, XMLTree):
         - "username" of type "xsd:string"
         - "quoteServerTime" of type "xsd:integer"
         - "cryptokey" of type "xsd:string"
-        
 """
+
+async def add(transaction_num, user_id, amount, **settings):
+    xml_tree = settings["xml_tree"]
+    conn = settings["conn"]
+
+    command = UserCommand()
+    attributes = {
+        "timestamp": int(time.time() * 1000), 
+        "server": "DDJK",
+        "transactionNum": int(transaction_num),
+        "command": "ADD",
+        "funds": float(amount)
+    }
+    command.updateAll(**attributes)
+    xml_tree.append(command)
+    
+    query =  "INSERT INTO users (username, balance) " \
+             "VALUES ($1, $2) " \
+             "ON CONFLICT (username) DO UPDATE " \
+             "SET balance = (users.balance + $2) " \
+             "WHERE users.username = $1;"
+
+    try:
+        logger.info("Executing add command for transaction %s", transaction_num)
+        async with conn.transaction():
+            await conn.execute(query, user_id, float(amount))
+            logger.debug("Balance update for %s sucessful.", transaction_num)
+
+    except:
+        error = ErrorEvent()
+        attributes = {
+            "timestamp": int(time.time() * 1000), 
+            "server": "DDJK",
+            "transactionNum": int(transaction_num),
+            "command": "ADD",
+            "username": user_id,
+            "funds": float(amount),
+            "errorMessage": "ADD error" 
+        }
+        error.updateAll(**attributes)
+        xml_tree.append(error)
+
+        logger.exception("Error occurred while processing add %s.", transaction_num)
+        return
+        
+    transaction = AccountTransaction()
+    attributes = {
+        "timestamp": int(time.time() * 1000), 
+        "server": "DDJK",
+        "transactionNum": int(transaction_num),
+        "action": "add", 
+        "username": user_id,
+        "funds": float(amount)
+    }
+    transaction.updateAll(**attributes)
+    xml_tree.append(transaction)
+
 # Helper function - used to cancel buy orders after they timeout
-def buy_timeout(user_id, stock_symbol, dollar_amount, conn, XMLTree):
+def _buy_timeout(user_id, stock_symbol, dollar_amount, conn, XMLTree):
+    # todo
     cursor = conn.cursor()
 
     cursor.execute('SELECT * FROM reserved WHERE    '
@@ -162,86 +178,140 @@ def buy_timeout(user_id, stock_symbol, dollar_amount, conn, XMLTree):
         print('buy order timout - the following buy order is now cancelled: ', 
             user_id, stock_symbol, dollar_amount)
 
-def buy(transaction_num, user_id, stock_symbol, amount, conn, XMLTree):
-    cursor = conn.cursor()
+async def buy(transaction_num, user_id, stock_symbol, amount, **settings):
+    xml_tree = settings["xml_tree"]
+    conn = settings["conn"]
     
     command = UserCommand()
     attributes = {
         "timestamp": int(time.time() * 1000), 
         "server": "DDJK",
-        "transactionNum": transaction_num,
+        "transactionNum": int(transaction_num),
         "command": "BUY",
         "username": user_id,
         "stockSymbol": stock_symbol,
         "funds": float(amount)
     }
     command.updateAll(**attributes)
-    XMLTree.append(command)
+    xml_tree.append(command)
     
-    price, stock_symbol, user_id, time_of_quote, cryptokey = quote(transaction_num, user_id, stock_symbol, XMLTree)
-    # Debugging print - feel free to delete this (Dusty)
-    print("in BUY.  List of data from quote:", 
-        "Price:", price,
-        "stock_symbol:", stock_symbol,
-        "user_id:", user_id,
-        "time_of_quote:", time_of_quote,
-        "cryptokey:", cryptokey)
+    price, stock_symbol, user_id, time_of_quote, cryptokey = await quote(transaction_num, user_id, stock_symbol, **settings)
 
-    balance_update =    "UPDATE users " \
-                        "SET balance = balance - '{amount}' " \
-                        "WHERE username = '{username}' " \
-                        "AND balance >= {amount};".format(username=user_id, amount=amount)
-
-    reserved_update =   "INSERT INTO reserved " \
-                        "(type, username, stock_symbol, stock_quantity, price, amount, timestamp) " \
-                        "VALUES " \
-                        "('{command}', '{username}', '{stock_symbol}', {stock_quantity}, {price}, {amount}, {timestamp});".format(command='buy', username=user_id, stock_symbol=stock_symbol, stock_quantity=int(float(amount)/price), price=price, amount=amount, timestamp=round(time.time()))
-
-    cursor.execute("BEGIN")
-    try:
-        print("in try block of BUY:", balance_update)
-        cursor.execute(balance_update)
-        cursor.execute(reserved_update)
-        conn.commit()
-    except Exception as e:
-        print("in except block of BUY:", e)
-        conn.rollback()
+    stock_quantity = int(float(amount) / price)
+    if stock_quantity <= 0:
         error = ErrorEvent()
         attributes = {
             "timestamp": int(time.time() * 1000), 
             "server": "DDJK",
-            "transactionNum": transaction_num,
+            "transactionNum": int(transaction_num),
             "command": "BUY",
             "username": user_id,
             "stockSymbol": stock_symbol,
             "funds": float(amount),
-            "errorMessage": "Insufficient Funds" 
+            "errorMessage": "Amount insufficient to purchase at least 1 stock" 
         }
         error.updateAll(**attributes)
-        XMLTree.append(error)
+        xml_tree.append(error)
+
+        logger.info("Amount insufficient to purchase at least 1 stock for %s.", transaction_num)
         return
 
+    assert stock_quantity > 0
+    purchase_price = float(stock_quantity * price)
+
+
+    logger.info("Executing buy command for transaction %s", transaction_num)
+    async with conn.transaction():
+
+        # If user has insufficient funds, exit early.
+        async with conn.transaction():
+
+            balance_check = "SELECT * FROM users " \
+                            "WHERE username = $1 " \
+                            "AND balance >= $2;"
+
+            result = await conn.fetchrow(balance_check, user_id, purchase_price)
+
+            if not result:
+                error = ErrorEvent()
+                attributes = {
+                    "timestamp": int(time.time() * 1000), 
+                    "server": "DDJK",
+                    "transactionNum": int(transaction_num),
+                    "command": "BUY",
+                    "username": user_id,
+                    "stockSymbol": stock_symbol,
+                    "funds": purchase_price,
+                    "errorMessage": "Funds insufficient to purchase requested stock."
+                }
+                error.updateAll(**attributes)
+                xml_tree.append(error)
+
+                logger.info("Funds insufficient to purchase requested stock for %s", transaction_num)
+                return
+
+
+        balance_update =    "UPDATE users " \
+                            "SET balance = balance - $1 " \
+                            "WHERE username = $2;"
+
+        # Only reserve the exact amount needed to buy the stock
+        await conn.execute(balance_update, purchase_price, user_id)
+        logger.debug("Balance update for %s sucessful.", transaction_num)
+
+
+        reserved_update =   "INSERT INTO reserved " \
+                            "(type, username, stock_symbol, stock_quantity, price, amount, timestamp) " \
+                            "VALUES " \
+                            "('buy', $1, $2, $3, $4, $5, $6);"
+
+        timestamp = round(time.time())
+        await conn.execute(reserved_update, user_id, stock_symbol,
+                stock_quantity, price, purchase_price, timestamp)
+        logger.debug("Reserved update for %s sucessful.", transaction_num)
 
     transaction = AccountTransaction()
     attributes = {
         "timestamp": int(time.time() * 1000), 
         "server": "DDJK",
-        "transactionNum": transaction_num,
+        "transactionNum": int(transaction_num),
         "action": "remove", 
         "username": user_id,
         "funds": float(amount)
     }
     transaction.updateAll(**attributes)
-    XMLTree.append(transaction)
+    xml_tree.append(transaction)
 
     #threading.Timer(QUOTE_LIFESPAN, buy_timeout, args=(user_id, stock_symbol, amount, conn)).start()
 
+async def commit_buy(transaction_num, user_id, **settings):
+    xml_tree = settings["xml_tree"]
+    conn = settings["conn"]
 
-def commit_buy(transaction_num, user_id, conn, XMLTree):
-    cursor = conn.cursor()
+    query = "SELECT * FROM reserved WHERE type = 'buy' AND username = %s AND timestamp > %s;"
 
-    cursor.execute('SELECT * FROM reserved WHERE type = %s AND username = %s AND timestamp > %s;', ('buy', user_id, round(time.time(), 5)-60))
-    conn.commit()
+    try:
+        logger.info("Executing commit_buy command for transaction %s", transaction_num)
+        async with conn.transaction():
+            await conn.execute(query, user_id, round(time.time(), 5)-60)
+            logger.debug("Balance update for %s sucessful.", transaction_num)
+    except:
+        error = ErrorEvent()
+        attributes = {
+            "timestamp": int(time.time() * 1000),
+            "server": "DDJK",
+            "transactionNum": int(transaction_num),
+            "command": "ADD",
+            "username": user_id,
+            "funds": float(amount),
+            "errorMessage": "ADD error"
+        }
+        error.updateAll(**attributes)
+        xml_tree.append(error)
+
+        logger.exception("Error occurred while processing add %s.", transaction_num)
+        return
+
 
     command = UserCommand()
     attributes = {

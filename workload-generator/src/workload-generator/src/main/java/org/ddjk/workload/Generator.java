@@ -26,9 +26,7 @@ public class Generator {
     private static final int PORT = 4000;
 
     private static final String[] ADDRESSES = new String[]{
-    	"192.168.1.249",
-    	"192.168.1.226",
-    	"192.168.1.223"
+    	"192.168.0.15"
     };
 
     private static final String URL_PRE = "http://";
