@@ -67,19 +67,6 @@ async def quote(transaction_num, user_id, stock_symbol, **settings):
 
     return new_price, stock_symbol, user_id, time_of_quote, cryptokey
 
-""" 
-        need to send data to log file including:
-        - "quoteServer" of type "QuoteServerType"
-        - "timestampe" of type "unixTimeLimits"
-        - "server" of type "xsd:string"
-        - "transactionNum" of type "xsd:positiveInteger"
-        - "price" of type "xsd:decimal"
-        - "stockSymbol" of type "stockSymbolType"
-        - "username" of type "xsd:string"
-        - "quoteServerTime" of type "xsd:integer"
-        - "cryptokey" of type "xsd:string"
-"""
-
 async def add(transaction_num, user_id, amount, **settings):
     xml_tree = settings["xml_tree"]
     conn = settings["conn"]
@@ -101,28 +88,10 @@ async def add(transaction_num, user_id, amount, **settings):
              "SET balance = (users.balance + $2) " \
              "WHERE users.username = $1;"
 
-    try:
-        logger.info("Executing add command for transaction %s", transaction_num)
-        async with conn.transaction():
-            await conn.execute(query, user_id, float(amount))
-            logger.debug("Balance update for %s sucessful.", transaction_num)
-
-    except:
-        error = ErrorEvent()
-        attributes = {
-            "timestamp": int(time.time() * 1000), 
-            "server": "DDJK",
-            "transactionNum": int(transaction_num),
-            "command": "ADD",
-            "username": user_id,
-            "funds": float(amount),
-            "errorMessage": "ADD error" 
-        }
-        error.updateAll(**attributes)
-        xml_tree.append(error)
-
-        logger.exception("Error occurred while processing add %s.", transaction_num)
-        return
+    logger.info("Executing add command for transaction %s", transaction_num)
+    async with conn.transaction():
+        await conn.execute(query, user_id, float(amount))
+        logger.debug("Balance update for %s sucessful.", transaction_num)
         
     transaction = AccountTransaction()
     attributes = {
@@ -223,32 +192,29 @@ async def buy(transaction_num, user_id, stock_symbol, amount, **settings):
     logger.info("Executing buy command for transaction %s", transaction_num)
     async with conn.transaction():
 
-        # If user has insufficient funds, exit early.
-        async with conn.transaction():
+        balance_check = "SELECT * FROM users " \
+                        "WHERE username = $1 " \
+                        "AND balance >= $2;"
 
-            balance_check = "SELECT * FROM users " \
-                            "WHERE username = $1 " \
-                            "AND balance >= $2;"
+        result = await conn.fetchrow(balance_check, user_id, purchase_price)
 
-            result = await conn.fetchrow(balance_check, user_id, purchase_price)
+        if not result:
+            error = ErrorEvent()
+            attributes = {
+                "timestamp": int(time.time() * 1000), 
+                "server": "DDJK",
+                "transactionNum": int(transaction_num),
+                "command": "BUY",
+                "username": user_id,
+                "stockSymbol": stock_symbol,
+                "funds": purchase_price,
+                "errorMessage": "Funds insufficient to purchase requested stock."
+            }
+            error.updateAll(**attributes)
+            xml_tree.append(error)
 
-            if not result:
-                error = ErrorEvent()
-                attributes = {
-                    "timestamp": int(time.time() * 1000), 
-                    "server": "DDJK",
-                    "transactionNum": int(transaction_num),
-                    "command": "BUY",
-                    "username": user_id,
-                    "stockSymbol": stock_symbol,
-                    "funds": purchase_price,
-                    "errorMessage": "Funds insufficient to purchase requested stock."
-                }
-                error.updateAll(**attributes)
-                xml_tree.append(error)
-
-                logger.info("Funds insufficient to purchase requested stock for %s", transaction_num)
-                return
+            logger.info("Funds insufficient to purchase requested stock for %s", transaction_num)
+            return
 
 
         balance_update =    "UPDATE users " \
@@ -259,7 +225,8 @@ async def buy(transaction_num, user_id, stock_symbol, amount, **settings):
         await conn.execute(balance_update, purchase_price, user_id)
         logger.debug("Balance update for %s sucessful.", transaction_num)
 
-
+        # It is possible that we have an identical reservation already, however we add this
+        # seperately since a COMMIT_BUY only needs to confirm the most recent, not both.
         reserved_update =   "INSERT INTO reserved " \
                             "(type, username, stock_symbol, stock_quantity, price, amount, timestamp) " \
                             "VALUES " \
@@ -288,105 +255,62 @@ async def commit_buy(transaction_num, user_id, **settings):
     xml_tree = settings["xml_tree"]
     conn = settings["conn"]
 
-    query = "SELECT * FROM reserved WHERE type = 'buy' AND username = %s AND timestamp > %s;"
-
-    try:
-        logger.info("Executing commit_buy command for transaction %s", transaction_num)
-        async with conn.transaction():
-            await conn.execute(query, user_id, round(time.time(), 5)-60)
-            logger.debug("Balance update for %s sucessful.", transaction_num)
-    except:
-        error = ErrorEvent()
-        attributes = {
-            "timestamp": int(time.time() * 1000),
-            "server": "DDJK",
-            "transactionNum": int(transaction_num),
-            "command": "ADD",
-            "username": user_id,
-            "funds": float(amount),
-            "errorMessage": "ADD error"
-        }
-        error.updateAll(**attributes)
-        xml_tree.append(error)
-
-        logger.exception("Error occurred while processing add %s.", transaction_num)
-        return
-
-
     command = UserCommand()
     attributes = {
         "timestamp": int(time.time() * 1000), 
         "server": "DDJK",
-        "transactionNum": transaction_num,
+        "transactionNum": int(transaction_num),
         "command": "COMMIT_BUY",
         "username": user_id
     }
     command.updateAll(**attributes)
-    XMLTree.append(command)
+    xml_tree.append(command)
     
-    
-    # NO BUY TO COMMIT
-    try:
-        if cursor.fetchall() == []:
+    async with conn.transaction():
+
+        select_buy =    "SELECT reservationid, stock_symbol, stock_quantity " \
+                        "FROM reserved " \
+                        "WHERE type = 'buy' " \
+                        "AND username = $1 " \
+                        "AND timestamp = ( " \
+                            "SELECT MAX(timestamp) " \
+                            "FROM reserved " \
+                            "WHERE type = 'buy' " \
+                            "AND username = $1 " \
+                        ") " \
+                        "AND timestamp > $2;"
+
+        target_timestamp = round(time.time(), 5) - 60
+        selected = await conn.fetchrow(select_buy, user_id, target_timestamp)
+        if not selected:
             error = ErrorEvent()
             attributes = {
                 "timestamp": int(time.time() * 1000), 
                 "server": "DDJK",
-                "transactionNum": transaction_num,
+                "transactionNum": int(transaction_num),
                 "command": "BUY",
                 "username": user_id,
                 "errorMessage": "No BUY to commit" 
             }
             error.updateAll(**attributes)
-            XMLTree.append(error)
-        # BUY TO COMMIT
-        else:
-        
-            cursor.execute('SELECT reservationid, stock_symbol, stock_quantity, amount, price FROM reserved WHERE type = %s AND username = %s AND timestamp = (SELECT MAX(timestamp) FROM reserved WHERE type = %s AND username = %s);', ('buy', user_id, 'buy', user_id))
-            conn.commit()
+            xml_tree.append(error)
 
-            try:
-                elements = cursor.fetchone()
-                reservationid = elements[0]
-                stock_symbol = elements[1]
-                stock_quantity = elements[2]
-                amount = elements[3]
-                price = elements[4]
-            except:
-                conn.rollback()
-                return
-            
-            
-            function =  "INSERT INTO stocks (username, stock_symbol, stock_quantity) " \
-                        "VALUES ('{username}', '{symbol}', {quantity}) " \
+            logger.info("No buy to commit for %s", transaction_num)
+            return
+
+        stock_update =  "INSERT INTO stocks (username, stock_symbol, stock_quantity) " \
+                        "VALUES ($1, $2, $3) " \
                         "ON CONFLICT (username, stock_symbol) DO UPDATE " \
-                        "SET stock_quantity = (stocks.stock_quantity + {quantity}) " \
-                        "WHERE stocks.username = '{username}' and stocks.stock_symbol = '{symbol}';".format(username=user_id, symbol=stock_symbol, quantity=stock_quantity)
-            
-            cursor.execute(function, (user_id, amount))
-            
-            cursor.execute('UPDATE users SET balance = balance + %s WHERE username = %s', (amount-(price*stock_quantity), user_id))    
-            conn.commit
-            
+                        "SET stock_quantity = (stocks.stock_quantity + $3) " \
+                        "WHERE stocks.username = $1 " \
+                        "AND stocks.stock_symbol = $2;"
+        
+        await conn.execute(stock_update, user_id, selected["stock_symbol"], selected["stock_quantity"])
+        
+        reservation_delete =    "DELETE FROM reserved " \
+                                "WHERE reservationid = $1;"
 
-            transaction = AccountTransaction()
-            attributes = {
-                "timestamp": int(time.time() * 1000), 
-                "server": "DDJK",
-                "transactionNum": transaction_num,
-                "action": "add", 
-                "username": user_id,
-                "funds": float(amount-(price*stock_quantity))
-            }
-            transaction.updateAll(**attributes)
-            XMLTree.append(transaction)
-
-            cursor.execute('DELETE FROM reserved WHERE reservationid = %s', (reservationid,))    
-            conn.commit()        
-        return
-    except:
-        conn.rollback()
-        pass
+        await conn.execute(reservation_delete, selected["reservationid"])
 
 def cancel_buy(transaction_num, user_id, conn, XMLTree):
     cursor = conn.cursor()

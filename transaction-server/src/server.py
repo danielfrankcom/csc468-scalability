@@ -1,6 +1,3 @@
-from timeit import default_timer as timer
-from datetime import timedelta
-
 import lib.commands as commands
 from lib.xml_writer import *
 
@@ -22,7 +19,8 @@ DB_PORT = 5432
 PROCESSORS = [
         (commands.quote, re.compile(r"^\[(\d+)\] QUOTE,([^ ]{10}),([A-Z]{1,3}) ?$")),
         (commands.add, re.compile(r"^\[(\d+)\] ADD,([^ ]{10}),(\d+\.\d{2}) ?$")),
-        (commands.buy, re.compile(r"^\[(\d+)\] BUY,([^ ]{10}),([A-Z]{1,3}),(\d+\.\d{2}) ?$"))
+        (commands.buy, re.compile(r"^\[(\d+)\] BUY,([^ ]{10}),([A-Z]{1,3}),(\d+\.\d{2}) ?$")),
+        (commands.commit_buy, re.compile(r"^\[(\d+)\] COMMIT_BUY,([^ ]{10}) ?$"))
 ]
 
 ERROR_PATTERN = re.compile(r"^\[(\d+)\] ([A-Z_]+),([^ ,]+)")
@@ -293,7 +291,6 @@ class Processor:
 
         while True:
             work_item, transaction = await queue.get()
-            start = timer()
             logger.info("Work retreived for transaction %s.", transaction)
 
             try:
@@ -304,9 +301,6 @@ class Processor:
                 # issue doesn't occur again. If it does, there's not much we can do.
                 logger.exception("Work item failed for transaction %s.", transaction)
                 self._log_error(transaction)
-
-            end = timer()
-            print(timedelta(seconds=end-start))
                 
 
 logging.basicConfig(level=logging.DEBUG)
