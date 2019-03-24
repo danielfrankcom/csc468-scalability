@@ -22,7 +22,9 @@ PROCESSORS = [
         (commands.buy, re.compile(r"^\[(\d+)\] BUY,([^ ]{10}),([A-Z]{1,3}),(\d+\.\d{2}) ?$")),
         (commands.commit_buy, re.compile(r"^\[(\d+)\] COMMIT_BUY,([^ ]{10}) ?$")),
         (commands.cancel_buy, re.compile(r"^\[(\d+)\] CANCEL_BUY,([^ ]{10}) ?$")),
-        (commands.sell, re.compile(r"^\[(\d+)\] SELL,([^ ]{10}),([A-Z]{1,3}),(\d+\.\d{2}) ?$"))
+        (commands.sell, re.compile(r"^\[(\d+)\] SELL,([^ ]{10}),([A-Z]{1,3}),(\d+\.\d{2}) ?$")),
+        (commands.commit_sell, re.compile(r"^\[(\d+)\] COMMIT_SELL,([^ ]{10}) ?$")),
+        (commands.cancel_sell, re.compile(r"^\[(\d+)\] CANCEL_SELL,([^ ]{10}) ?$"))
 ]
 
 ERROR_PATTERN = re.compile(r"^\[(\d+)\] ([A-Z_]+),([^ ,]+)")
