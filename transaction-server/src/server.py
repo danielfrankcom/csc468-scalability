@@ -2,19 +2,24 @@ import lib.commands as commands
 from lib.xml_writer import *
 
 from quart import Quart, request, jsonify
+import asyncpg
 import asyncio
 import uvloop
-import asyncpg
-from concurrent.futures import ProcessPoolExecutor
 
+import traceback
 import logging
-import json
-import os, re, time, traceback
+import socket
+import time
+import os
+import re
 
 
 DB = DB_USER = DB_HOST = "postgres"
 DB_PASSWORD = "supersecure"
 DB_PORT = 5432
+
+CONN_MIN = 100
+CONN_MAX = 1000
 
 PROCESSORS = [
         (commands.quote, re.compile(r"^\[(\d+)\] QUOTE,([^ ]{10}),([A-Z]{1,3}) ?$")),
@@ -179,9 +184,31 @@ class Processor:
     # todo: move to database
     xml_tree = LogBuilder("/out/testLOG")
 
-    def __init__(self):
+    def _db_available(self):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            return s.connect_ex((DB_HOST, DB_PORT)) == 0
+
+    def __init__(self, loop):
         self.users = dict()
         logger.info("Processor object created.")
+
+        # It is possible that the postgres container has started
+        # but is not ready for connections. We poll until it is
+        # ready to ensure that we can create the pool below.
+        while not self._db_available():
+            time.sleep(1)
+
+        self.pool = loop.run_until_complete(
+                asyncpg.create_pool(
+                    min_size=CONN_MIN,
+                    max_size=CONN_MAX,
+                    database=DB,
+                    user=DB_USER,
+                    password=DB_PASSWORD,
+                    host=DB_HOST,
+                    port=DB_PORT
+            )
+        )
 
         # todo: will start timer thread here
 
@@ -268,18 +295,6 @@ class Processor:
             logger.exception("Error logging failed for %s.", transaction)
 
     async def _handle_user(self, queue):
-        # Each async worker has their own database connection,
-        # as their own actions are synchronous with respect to
-        # transactions by the same user.
-        conn = await asyncpg.connect(
-                database=DB,
-                user=DB_USER,
-                password=DB_PASSWORD,
-                host=DB_HOST,
-                port=DB_PORT
-        )
-        logger.info("Connection opened to DB for queue (%s).", id(queue))
-
         # In theory creating a new async worker for each user
         # is not great, as they will never go away. In practice
         # this is fine for the scope of the project, as they
@@ -288,32 +303,34 @@ class Processor:
         # a real system. With the amount of users that we are
         # dealing with, this won't be an issue.
 
-        arguments = {
-                "conn": conn,
-                "xml_tree": self.xml_tree
-        }
-
         while True:
             work_item, transaction = await queue.get()
             logger.info("Work retreived for transaction %s.", transaction)
 
-            try:
-                await work_item(arguments)
-                logger.info("Work item completed for transaction %s.", transaction)
-            except:
-                # We log the error (in xml) and continue to limp along, hoping the
-                # issue doesn't occur again. If it does, there's not much we can do.
-                logger.exception("Work item failed for transaction %s.", transaction)
-                self._log_error(transaction)
+            async with self.pool.acquire() as conn:
+                arguments = {
+                        "conn": conn,
+                        "xml_tree": self.xml_tree
+                }
+
+                try:
+                    await work_item(arguments)
+                    logger.info("Work item completed for transaction %s.", transaction)
+                except:
+                    # We log the error (in xml) and continue to limp along, hoping the
+                    # issue doesn't occur again. If it does, there's not much we can do.
+                    logger.exception("Work item failed for transaction %s.", transaction)
+                    self._log_error(transaction)
                 
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-#executor = ThreadPoolExecutor(1000)
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
-processor = Processor()
+loop = asyncio.get_event_loop()
+processor = Processor(loop)
+
 app = Quart(__name__)
 
 @app.route('/', methods=['POST'])
@@ -329,3 +346,5 @@ async def root():
 
     response = jsonify(success=True)
     return response
+
+app.run(host="0.0.0.0", port="5000", loop=loop)

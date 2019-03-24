@@ -18,7 +18,8 @@ RUN pip3 --trusted-host pypi.org --trusted-host files.pythonhosted.org install h
 WORKDIR /src
 
 # Configure command to run on startup.
-CMD ["hypercorn", "server:app", "--bind", "0.0.0.0:5000", "--worker-class", "uvloop"]
+#CMD ["hypercorn", "server:app", "--bind", "0.0.0.0:5000", "--worker-class", "uvloop"]
+CMD ["python", "/src/server.py"]
 
 COPY ./src /src
 

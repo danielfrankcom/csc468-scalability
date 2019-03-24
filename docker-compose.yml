@@ -1,13 +1,5 @@
 version: '3'
 services:
-    postgres:
-        image: postgres:11.1
-        restart: on-failure
-        environment:
-            - POSTGRES_USER=${DB_USER}
-            - POSTGRES_PASSWORD=${DB_PASS}
-        volumes:
-            - ./database:/docker-entrypoint-initdb.d/:ro
     adminer:
         image: michalhosna/adminer:4.7.0
         depends_on:
@@ -22,6 +14,14 @@ services:
             - ADMINER_USERNAME=${DB_USER}
             - ADMINER_PASSWORD=${DB_PASS}
             - ADMINER_AUTOLOGIN=1
+    postgres:
+        build: database
+        restart: on-failure
+        environment:
+            - POSTGRES_USER=${DB_USER}
+            - POSTGRES_PASSWORD=${DB_PASS}
+        volumes:
+            - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     transaction-server:
         build: transaction-server
         depends_on:
