@@ -34,7 +34,7 @@ PROCESSORS = [
         (commands.cancel_set_buy, re.compile(r"^\[(\d+)\] CANCEL_SET_BUY,([^ ]{10}),([A-Z]{1,3}) ?$")),
         (commands.set_buy_trigger, re.compile(r"^\[(\d+)\] SET_BUY_TRIGGER,([^ ]{10}),([A-Z]{1,3}),(\d+\.\d{2}) ?$")),
         (commands.set_sell_amount, re.compile(r"^\[(\d+)\] SET_SELL_AMOUNT,([^ ]{10}),([A-Z]{1,3}),(\d+\.\d{2}) ?$")),
-        #(commands.cancel_set_buy, re.compile(r"^\[(\d+)\] CANCEL_SET_BUY,([^ ]{10}),([A-Z]{1,3}) ?$")),
+        (commands.cancel_set_sell, re.compile(r"^\[(\d+)\] CANCEL_SET_SELL,([^ ]{10}),([A-Z]{1,3}) ?$")),
         (commands.set_sell_trigger, re.compile(r"^\[(\d+)\] SET_SELL_TRIGGER,([^ ]{10}),([A-Z]{1,3}),(\d+\.\d{2}) ?$"))
 ]
 

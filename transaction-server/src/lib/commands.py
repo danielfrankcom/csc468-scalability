@@ -914,50 +914,65 @@ async def cancel_set_sell(transaction_num, user_id, stock_symbol, **settings):
     attributes = {
         "timestamp": int(time.time() * 1000), 
         "server": "DDJK",
-        "transactionNum": transaction_num,
+        "transactionNum": int(transaction_num),
         "command": "CANCEL_SET_SELL",
         "username": user_id,
         "stockSymbol": stock_symbol
     }
     command.updateAll(**attributes)
-    XMLTree.append(command)
-    
-    cursor.execute( 'SELECT transaction_amount FROM triggers   '
-                    'WHERE username = %s                    '
-                    'AND stock_symbol = %s;                '
-                    ,(user_id, stock_symbol))
-    try:
-        result = cursor.fetchall()
-    except:
-        conn.rollback()
-        return
-    if len(result) == 0:
-        error = ErrorEvent()
-        attributes = {
-            "timestamp": int(time.time() * 1000), 
-            "server": "DDJK",
-            "transactionNum": transaction_num,
-            "command": "BUY",
-            "username": user_id,
-            "errorMessage": "Order does not exist"
-        }
-        error.updateAll(**attributes)
-        XMLTree.append(error)
-        return
-    else:
-        stock_amount_to_refund = result[0][0]
-        print("order exists, will cancel it")
-        cursor.execute('DELETE FROM triggers   '
-                        'WHERE username = %s    '
-                        'AND stock_symbol = %s  '
-                        'AND type = %s;         '
-                        ,(user_id, stock_symbol, 'sell'))
-        # refund stocks to user
-        cursor.execute( 'UPDATE stocks SET stock_quantity = stock_quantity + %s '
-                        'WHERE username = %s                                    '
-                        'AND stock_symbol = %s;                                 '
-                        ,(stock_amount_to_refund, user_id, stock_symbol))
-    return 
+    xml_tree.append(command)
+
+    async with conn.transaction():
+
+        get_existing = "SELECT transaction_amount, trigger_amount   " \
+                       "FROM triggers                               " \
+                       "WHERE username = $1                         " \
+                       "AND stock_symbol = $2                       " \
+                       "AND type = 'sell';                          "
+
+        # Does SET_SELL order exist for this user/stock combo?
+        existing = await conn.fetchrow(get_existing, user_id, stock_symbol)
+
+        if not existing:
+            error = ErrorEvent()
+            attributes = {
+                "timestamp": int(time.time() * 1000),
+                "server": "DDJK",
+                "transactionNum": int(transaction_num),
+                "command": "CANCEL_SET_SELL",
+                "username": user_id,
+                "errorMessage": "SET_SELL does not exist, no action taken"
+            }
+            error.updateAll(**attributes)
+            xml_tree.append(error)
+
+            logger.info("SET_SELL does not exist, no action taken")
+            return
+
+        logger.info("SET_SELL found, cancelling")
+
+        trigger_amount = existing["trigger_amount"]
+
+        if trigger_amount:
+            # There is a trigger amount set, so funds were subtracted from
+            # the user's account, refund them.
+
+            transaction_amount = existing["transaction_amount"]
+            refund_amount = int(float(transaction_amount) / trigger_amount)
+                            
+            stocks_update = "UPDATE stocks                              " \
+                            "SET stock_quantity = stock_quantity + $1   " \
+                            "WHERE username = $2                        " \
+                            "AND stock_symbol = $3;                     "
+
+            await conn.execute(stocks_update, refund_amount, user_id, stock_symbol)
+
+        triggers_delete =   "DELETE FROM triggers   " \
+                            "WHERE username = $1    " \
+                            "AND stock_symbol = $2  " \
+                            "AND type = 'sell';      "
+
+        await conn.execute(triggers_delete, user_id, stock_symbol)
 
 async def set_sell_trigger(transaction_num, user_id, stock_symbol, requested_trigger, **settings):
     xml_tree = settings["xml_tree"]
