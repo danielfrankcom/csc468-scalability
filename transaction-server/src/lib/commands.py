@@ -39,7 +39,7 @@ async def get_quote(user_id, stock_symbol):
     else:
         # This sleep will mock production delays
         # await asyncio.sleep(2)
-        result = "20.01,BAD,usernamehere,1549827515,crytoKEY=123=o"
+        result = "20.00,BAD,usernamehere,1549827515,crytoKEY=123=o"
 
     price, symbol, username, timestamp, cryptokey = result.split(",")
     return float(price), int(timestamp), cryptokey, username
@@ -606,7 +606,6 @@ async def set_buy_amount(transaction_num, user_id, stock_symbol, amount, **setti
                         "WHERE username = $1;   " \
 
         balance = await conn.fetchval(balance_check, user_id)
-        logger.debug("Balance of %s: %.02f", user_id, balance)
 
         if not balance or balance < difference:
             error = ErrorEvent()
@@ -622,7 +621,7 @@ async def set_buy_amount(transaction_num, user_id, stock_symbol, amount, **setti
             xml_tree.append(error)
             return
 
-        logger.info("Balance for transaction %s is sufficient.", transaction_num)
+        logger.debug("Balance of %s: %.02f is sufficient for %s", user_id, balance, transaction_num)
 
         users_update =  "UPDATE users               " \
                         "SET balance = balance - $1 " \
@@ -797,7 +796,7 @@ async def set_sell_amount(transaction_num, user_id, stock_symbol, requested_tran
         "command": "SET_SELL_AMOUNT",
         "username": user_id,
         "stockSymbol": stock_symbol,
-        "funds": float(amount)
+        "funds": float(requested_transaction)
     }
     command.updateAll(**attributes)
     xml_tree.append(command)
@@ -823,8 +822,8 @@ async def set_sell_amount(transaction_num, user_id, stock_symbol, requested_tran
             xml_tree.append(error)
             return
 
-	# If a trigger already exists, we need to recalculate the required stock.
-	get_existing =  "SELECT transaction_amount, trigger_amount  " \
+        # If a trigger already exists, we need to recalculate the required stock.
+        get_existing =  "SELECT transaction_amount, trigger_amount  " \
                         "FROM triggers                              " \
                         "WHERE username = $1                        " \
                         "AND stock_symbol = $2                      " \
@@ -832,27 +831,14 @@ async def set_sell_amount(transaction_num, user_id, stock_symbol, requested_tran
 
         existing = await conn.fetchrow(get_existing, user_id, stock_symbol)
 
-	if existing:
+        if existing:
 
-	    # This may be None if the trigger has not yet been set.
-	    trigger_amount = existing["trigger_amount"]
+            # This may be None if the trigger has not yet been set.
+            trigger_amount = existing["trigger_amount"]
 
-            if not trigger_amount:
-                # Trigger has not yet been set, so we don't need to update
-                # the user's stocks.
-
-                triggers_update =   "UPDATE triggers            " \
-                                    "SET                        " \
-                                    "transaction_amount = $1,   " \
-                                    "transaction_number = $2    " \
-                                    "WHERE username = $3        " \
-                                    "AND stock_symbol = $4      " \
-                                    "AND type = 'sell'          " \
-
-                await conn.execute(triggers_update, float(requested_transaction),
-                        int(transaction_num), user_id, stock_symbol)
-
-            else:
+            if trigger_amount:
+                # Trigger has previously been set, so we must update the
+                # user's stocks.
 
                 current_transaction = existing["transaction_amount"]
 
@@ -860,30 +846,65 @@ async def set_sell_amount(transaction_num, user_id, stock_symbol, requested_tran
                 # the price is equal to or higher than the requested value. This
                 # means that the number of stock required will never be more than
                 # the division of the transaction amount by the trigger.
-                total_stock_required = int(requested_transaction / float(trigger_amount))
+                total_stock_required = int(float(requested_transaction) / trigger_amount)
 
-                if current_trigger:
-                    # There were previously stocks subtracted from the user, so we
-                    # must figure out how many extra we need to add/subtract.
-                    previously_subtracted = int(transaction_amount / current_trigger)
-                    difference = total_stock_required - previously_subtracted
-                else:
-                    difference = total_stock_required
+                # There were previously stocks subtracted from the user, so we
+                # must figure out how many extra we need to add/subtract.
+                previously_subtracted = int(current_transaction / trigger_amount)
+                difference = total_stock_required - previously_subtracted
 
-                triggers_update = "ON CONFLICT (username, stock_symbol, type) DO UPDATE                   " \
-                                "SET                                                                    " \
-                                "transaction_amount = $1,                                               " \
-                                "transaction_number = $2;                                               "
+                # Check if user owns enough stock to carry out this transaction.
+                get_stock_quantity =    "SELECT stock_quantity " \
+                                        "FROM stocks           " \
+                                        "WHERE username = $1   " \
+                                        "AND stock_symbol = $2;"
 
-                await conn.execute(triggers_update, float(requested_transaction), int(transaction_num))
+                stock_owned = await conn.fetchval(get_stock_quantity, user_id, stock_symbol)
 
-	else:
+                # Difference may be negative, however this check will still pass.
+                if not stock_owned or stock_owned < difference:
+                    error = ErrorEvent()
+                    attributes = {
+                        "timestamp": int(time.time() * 1000),
+                        "server": "DDJK",
+                        "transactionNum": int(transaction_num),
+                        "command": "SET_SELL_AMOUNT",
+                        "username": user_id,
+                        "errorMessage": "User does not own enough shares of this type"
+                    }
+                    error.updateAll(**attributes)
+                    xml_tree.append(error)
+                    return
 
-	    triggers_update =   "INSERT INTO triggers                                                   " \
-				"(username, stock_symbol, type, transaction_amount, transaction_number) " \
-				"VALUES ($1, $2, 'sell', $3, $4)                                        " \
+                logger.info("User owns enough stocks for transaction %s to proceed.", transaction_num)
 
-	    await conn.execute(triggers_update, user_id, stock_symbol, float(amount), int(transaction_num))
+                # Negative difference will result in an addition to the account here.
+                stocks_update = "UPDATE stocks                            " \
+                                "SET stock_quantity = stock_quantity - $1 " \
+                                "WHERE username = $2                      " \
+                                "AND stock_symbol = $3                    "
+
+                await conn.execute(stocks_update, difference, user_id, stock_symbol)
+
+            triggers_update =   "UPDATE triggers            " \
+                                "SET                        " \
+                                "transaction_amount = $1,   " \
+                                "transaction_number = $2    " \
+                                "WHERE username = $3        " \
+                                "AND stock_symbol = $4      " \
+                                "AND type = 'sell'          " \
+
+            await conn.execute(triggers_update, float(requested_transaction),
+                    int(transaction_num), user_id, stock_symbol)
+
+        else:
+
+            triggers_update =   "INSERT INTO triggers                                                   " \
+                                "(username, stock_symbol, type, transaction_amount, transaction_number) " \
+                                "VALUES ($1, $2, 'sell', $3, $4)                                        " \
+
+            await conn.execute(triggers_update, user_id, stock_symbol,
+                    float(requested_transaction), int(transaction_num))
 
 async def cancel_set_sell(transaction_num, user_id, stock_symbol, **settings):
     xml_tree = settings["xml_tree"]
@@ -1015,7 +1036,7 @@ async def set_sell_trigger(transaction_num, user_id, stock_symbol, requested_tri
                 "timestamp": int(time.time() * 1000), 
                 "server": "DDJK",
                 "transactionNum": int(transaction_num),
-                "command": "SET_SELL_AMOUNT",
+                "command": "SET_SELL_TRIGGER",
                 "username": user_id,
                 "errorMessage": "User does not own enough shares of this type"
             }
