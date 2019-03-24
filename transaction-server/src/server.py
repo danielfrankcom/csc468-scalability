@@ -29,155 +29,13 @@ PROCESSORS = [
         (commands.cancel_buy, re.compile(r"^\[(\d+)\] CANCEL_BUY,([^ ]{10}) ?$")),
         (commands.sell, re.compile(r"^\[(\d+)\] SELL,([^ ]{10}),([A-Z]{1,3}),(\d+\.\d{2}) ?$")),
         (commands.commit_sell, re.compile(r"^\[(\d+)\] COMMIT_SELL,([^ ]{10}) ?$")),
-        (commands.cancel_sell, re.compile(r"^\[(\d+)\] CANCEL_SELL,([^ ]{10}) ?$"))
+        (commands.cancel_sell, re.compile(r"^\[(\d+)\] CANCEL_SELL,([^ ]{10}) ?$")),
+        (commands.set_buy_amount, re.compile(r"^\[(\d+)\] SET_BUY_AMOUNT,([^ ]{10}),([A-Z]{1,3}),(\d+\.\d{2}) ?$")),
+        (commands.cancel_set_buy, re.compile(r"^\[(\d+)\] CANCEL_SET_BUY,([^ ]{10}),([A-Z]{1,3}) ?$")),
+        (commands.set_buy_trigger, re.compile(r"^\[(\d+)\] SET_BUY_TRIGGER,([^ ]{10}),([A-Z]{1,3}),(\d+\.\d{2}) ?$"))
 ]
 
 ERROR_PATTERN = re.compile(r"^\[(\d+)\] ([A-Z_]+),([^ ,]+)")
-
-
-
-"""
-Provides a method to call with parameters.
-"""
-def parse(raw, conn):
-
-    match = re.findall(pattern, raw)
-
-    if not match:
-        print("No matching command found.")
-        return
-
-    transactionNum, command, arguments = match[0]
-    transactionNum = int(transactionNum)
-    arguments = arguments.split(",")
-    
-    #QUOTE Command
-    if command == "QUOTE":
-        print("got in quote:", arguments)
-        try:
-            user_id, stock_symbol = arguments
-        except ValueError:
-            print("Invalid Input. <QUOTE user_id stock_symbol>")
-        else:    
-            quote(transactionNum, user_id, stock_symbol, XMLTree)
-    #ADD Command
-    elif command == "ADD":
-        try:
-            user_id, amount = arguments
-        except ValueError:
-            print("Invalid Input. <ADD, USER_ID, AMOUNT>")
-        else:    
-            add(transactionNum, user_id, amount, conn, XMLTree)
-    #BUY Command
-    elif command == "BUY":
-        try:
-            user_id, stock_symbol, amount = arguments
-        except ValueError:
-            print("Invalid Input. <BUY USER_ID STOCK_SYMBOL AMOUNT>")
-        else:    
-            buy(transactionNum, user_id, stock_symbol, amount, conn, XMLTree)
-    elif command == "COMMIT_BUY":
-        try:
-            [user_id] = arguments
-        except ValueError:
-            print("Invalid Input. <COMMIT_BUY USER_ID>")
-        else:    
-            commit_buy(transactionNum, user_id, conn, XMLTree)
-    elif command == "CANCEL_BUY":
-        try:
-            [user_id] = arguments
-        except ValueError:
-            print("Invalid Input. <CANCEL_BUY USER_ID>")
-        else:    
-            cancel_buy(transactionNum, user_id, conn, XMLTree)
-    elif command == "SELL":
-        try:
-            user_id, stock_symbol, amount = arguments
-        except ValueError:
-            print("Invalid Input. <SELL USER_ID STOCK_SYMBOL AMOUNT>")
-        else:    
-            sell(transactionNum, user_id, stock_symbol, amount, conn, XMLTree)
-    elif command == "COMMIT_SELL":
-        try:
-            [user_id] = arguments
-        except ValueError:
-            print("Invalid Input. <COMMIT_SELL USER_ID>")
-        else:    
-            commit_sell(transactionNum, user_id, conn, XMLTree)
-    elif command == "SET_BUY_AMOUNT":
-        try:
-            user_id, stock_symbol, amount = arguments
-        except ValueError:
-            print("Invalid input.  <SET_BUY_AMOUNT USER_ID STOCK_SYMBOL AMOUNT>")
-        else:
-            set_buy_amount(transactionNum, user_id, stock_symbol, amount, conn, XMLTree)
-    elif command == "CANCEL_SET_BUY":
-        try:
-            user_id, stock_symbol = arguments
-        except ValueError:
-            print("Invalid input.  <CANCEL_SET_BUY USER_ID STOCK_SYMBOL>")
-        else:
-            cancel_set_buy(transactionNum, user_id, stock_symbol, conn, XMLTree)
-    elif command == "SET_BUY_TRIGGER":
-        try:
-            user_id, symbol, amount = arguments
-        except ValueError:
-            print("Invalid input. <SET_BUY_TRIGGER USER_ID STOCK_SYMBOL AMOUNT>")
-        else:
-            set_buy_trigger(transactionNum, user_id, symbol, amount, conn, XMLTree)
-    elif command == "SET_SELL_AMOUNT":
-        try:
-            user_id, stock_symbol, amount = arguments
-        except ValueError:
-            print("Invalid input.  <SET_SELL_AMOUNT USER_ID STOCK_SYMBOL AMOUNT>")
-        else:
-            set_sell_amount(transactionNum, user_id, stock_symbol, amount, conn, XMLTree)
-    elif command == "CANCEL_SET_SELL":
-        try:
-            user_id, stock_symbol = arguments
-        except ValueError:
-            print("Invalid input.  <CANCEL_SET_SELL USER_ID STOCK_SYMBOL>")
-        else:
-            cancel_set_sell(transactionNum, user_id, stock_symbol, conn, XMLTree)
-    elif command == "CANCEL_SELL":
-        try:
-            [user_id] = arguments
-        except ValueError:
-            print("Invalid Input. <COMMIT_SELL USER_ID>")
-        else:    
-            cancel_sell(transactionNum, user_id, conn, XMLTree)
-    elif command == "SET_SELL_TRIGGER":
-        try:
-            user_id, symbol, amount = arguments
-        except ValueError:
-            print("Invalid input. <SET_SELL_TRIGGER USER_ID STOCK_SYMBOL AMOUNT>")
-        else:
-            set_sell_trigger(transactionNum, user_id, symbol, amount, conn, XMLTree)
-    elif command == "DUMPLOG":
-        try:
-            [location] = arguments
-        except ValueError:
-            try:
-                user_id, filename = arguments
-            except ValueError: 
-                print("Invalid Input. Functionality: <DUMPLOG FILENAME> or <DUMPLOG USERNAME>")
-            else:
-                filename = os.path.basename(location)
-                path = os.path.join("/out/", filename)
-                dumplog_user(transactionNum, user_id, path, XMLTree)
-        else:
-            filename = os.path.basename(location)
-            path = os.path.join("/out/", filename)
-            dumplog(transactionNum, path, XMLTree)
-    elif command == "DISPLAY_SUMMARY":
-        try:
-            [user_id] = arguments
-        except ValueError:
-            print("Invalid input. <DISPLAY_SUMMARY USER_ID>")
-        else:
-            display_summary(transactionNum, user_id, XMLTree)
-    else:
-        print(arguments, " Invalid Command")
 
 class Processor:
 
@@ -198,17 +56,28 @@ class Processor:
         while not self._db_available():
             time.sleep(1)
 
-        self.pool = loop.run_until_complete(
-                asyncpg.create_pool(
-                    min_size=CONN_MIN,
-                    max_size=CONN_MAX,
-                    database=DB,
-                    user=DB_USER,
-                    password=DB_PASSWORD,
-                    host=DB_HOST,
-                    port=DB_PORT
-            )
-        )
+        # Even after the above, sometimes the DB is in a secondary
+        # 'not connectable' state, so execute connection in such a
+        # way that it can be repeated.
+
+        success = False
+        while not success:
+            try:
+                self.pool = loop.run_until_complete(
+                        asyncpg.create_pool(
+                            min_size=CONN_MIN,
+                            max_size=CONN_MAX,
+                            database=DB,
+                            user=DB_USER,
+                            password=DB_PASSWORD,
+                            host=DB_HOST,
+                            port=DB_PORT
+                    )
+                )
+                success = True
+            except:
+                # Database is still in a non-connectable state.
+                continue
 
         # todo: will start timer thread here
 
@@ -286,7 +155,7 @@ class Processor:
                 "transactionNum": transaction_num,
                 "username": user_id,
                 "command": command,
-                "errorMessage": "Improperly formed command"
+                "errorMessage": "Error while processing command"
             }
             error.updateAll(**attributes)
             self.xml_tree.append(error)
