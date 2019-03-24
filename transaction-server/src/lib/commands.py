@@ -6,6 +6,7 @@ from itertools import count
 import asyncio
 import asyncpg
 import logging
+import math
 import os
 
 QUOTE_LIFESPAN = 60.0 # period of time a quote is valid for (will be 60.0 for deployed software)
@@ -784,11 +785,7 @@ async def set_buy_trigger(transaction_num, user_id, stock_symbol, amount, **sett
 
         await conn.execute(triggers_update, float(amount), int(transaction_num), user_id, stock_symbol)
 
-#TODO: if set_sell of this stock already exists, account for that stock when
-#      determining whether user owns enough stock to create set_sell order
-#   Also, it is now apparent this logic needs to change.  amount is a dollar amount, this has 
-#   been written under the assumption that it is a number of stock
-async def set_sell_amount(transaction_num, user_id, stock_symbol, amount, **settings):
+async def set_sell_amount(transaction_num, user_id, stock_symbol, requested_transaction, **settings):
     xml_tree = settings["xml_tree"]
     conn = settings["conn"]
     
@@ -807,86 +804,86 @@ async def set_sell_amount(transaction_num, user_id, stock_symbol, amount, **sett
 
     async with conn.transaction():
 
-        # check if user owns enough stock to carry out this transaction
-        get_stock_quantity =    "SELECT stock_quantity " \
-                                "FROM stocks           " \
-                                "WHERE username = $1   " \
-                                "AND stock_symbol = $2;"
+        user_check =    "SELECT username " \
+                        "FROM users  " \
+                        "WHERE username = $1; "
 
-        stock_owned = await conn.fetchval(get_stock_quantity, user_id, stock_symbol)
-
-        if not stock_owned:
+        exists = await conn.fetchval(user_check, user_id)
+        if not exists:
             error = ErrorEvent()
             attributes = {
                 "timestamp": int(time.time() * 1000), 
                 "server": "DDJK",
                 "transactionNum": int(transaction_num),
-                "command": "SET_SELL_AMOUNT",
+                "command": "SET_BUY_TRIGGER",
                 "username": user_id,
-                "errorMessage": "User owns no shares of this type"
+                "errorMessage": "User for SET_SELL_AMOUNT does not exist"
             }
             error.updateAll(**attributes)
             xml_tree.append(error)
             return
 
-        sell_price = stock_owned
-        
-        if stock_owned < amount:
-            error = ErrorEvent()
-            attributes = {
-                "timestamp": int(time.time() * 1000), 
-                "server": "DDJK",
-                "transactionNum": int(transaction_num),
-                "command": "BUY",
-                "username": user_id,
-                "errorMessage": "User does not own enough shares of this type"
-            }
-            error.updateAll(**attributes)
-            xml_tree.append(error)       
-            return
+	# If a trigger already exists, we need to recalculate the required stock.
+	get_existing =  "SELECT transaction_amount, trigger_amount  " \
+                        "FROM triggers                              " \
+                        "WHERE username = $1                        " \
+                        "AND stock_symbol = $2                      " \
+                        "AND type = 'sell';                         "
 
-        # user owns sufficient shares to proceed, so remove them from user account and create order
-        stocks_update = " UPDATE stocks                            " \
-                        " SET stock_quantity = stock_quantity - $1 " \
-                        " WHERE username = $2                      " \
-                        " AND stock_symbol = $3                    "
+        existing = await conn.fetchrow(get_existing, user_id, stock_symbol)
 
-        await conn.execute(stocks_update, amount, user_id, stock_symbol)
+	if existing:
 
+	    # This may be None if the trigger has not yet been set.
+	    trigger_amount = existing["trigger_amount"]
 
-	# If the order existed already, update it with the new BUY_AMOUNT, else create new record.
-        triggers_update =   "INSERT INTO triggers                                                   " \
-                            "(username, stock_symbol, type, transaction_amount, transaction_number) " \
-                            "VALUES ($1, $2, 'sell', $3, $4)                                        " \
-                            "ON CONFLICT (username, stock_symbol, type) DO UPDATE                   " \
-                            "SET                                                                    " \
-                            "transaction_amount = $3,                                               " \
-                            "transaction_number = $4;                                               "
+            if not trigger_amount:
+                # Trigger has not yet been set, so we don't need to update
+                # the user's stocks.
 
+                triggers_update =   "UPDATE triggers            " \
+                                    "SET                        " \
+                                    "transaction_amount = $1,   " \
+                                    "transaction_number = $2    " \
+                                    "WHERE username = $3        " \
+                                    "AND stock_symbol = $4      " \
+                                    "AND type = 'sell'          " \
 
-        # Does SET_SELL order exist for this user/stock combo?  If yes, modify record, else create new one
-        cursor.execute( 'SELECT transaction_amount     '
-                        'FROM triggers              '
-                        'WHERE username = %s        '
-                        'AND stock_symbol = %s      '
-                        'AND type = %s;             '
-                        ,(user_id, stock_symbol, 'sell')) 
-        try:
-            result = cursor.fetchone() # this is a tuple containing 1 string or None
-        except:
-            conn.rollback()
-            return
-        if result is None:
-            cursor.execute( ' INSERT INTO triggers                                                      '
-                            ' (username, stock_symbol, type, transaction_amount, transaction_number)    ' 
-                            ' VALUES (%s, %s, %s, %s, %s);                                              '
-                            ,(user_id, stock_symbol, 'sell', amount, transaction_num))
-        else: #modify existing record
-            cursor.execute( ' UPDATE triggers SET amount = amount + %s, transaction_number = %s '
-                            ' WHERE username = %s                                               '
-                            ' AND stock_symbol = %s                                             '
-                            ' AND type = %s                                                     '
-                            ,(amount, transaction_num, user_id, stock_symbol, 'sell'))
+                await conn.execute(triggers_update, float(requested_transaction),
+                        int(transaction_num), user_id, stock_symbol)
+
+            else:
+
+                current_transaction = existing["transaction_amount"]
+
+                # This is a sell, and therefore the trigger will only execute when
+                # the price is equal to or higher than the requested value. This
+                # means that the number of stock required will never be more than
+                # the division of the transaction amount by the trigger.
+                total_stock_required = int(requested_transaction / float(trigger_amount))
+
+                if current_trigger:
+                    # There were previously stocks subtracted from the user, so we
+                    # must figure out how many extra we need to add/subtract.
+                    previously_subtracted = int(transaction_amount / current_trigger)
+                    difference = total_stock_required - previously_subtracted
+                else:
+                    difference = total_stock_required
+
+                triggers_update = "ON CONFLICT (username, stock_symbol, type) DO UPDATE                   " \
+                                "SET                                                                    " \
+                                "transaction_amount = $1,                                               " \
+                                "transaction_number = $2;                                               "
+
+                await conn.execute(triggers_update, float(requested_transaction), int(transaction_num))
+
+	else:
+
+	    triggers_update =   "INSERT INTO triggers                                                   " \
+				"(username, stock_symbol, type, transaction_amount, transaction_number) " \
+				"VALUES ($1, $2, 'sell', $3, $4)                                        " \
+
+	    await conn.execute(triggers_update, user_id, stock_symbol, float(amount), int(transaction_num))
 
 async def cancel_set_sell(transaction_num, user_id, stock_symbol, **settings):
     xml_tree = settings["xml_tree"]
@@ -941,59 +938,110 @@ async def cancel_set_sell(transaction_num, user_id, stock_symbol, **settings):
                         ,(stock_amount_to_refund, user_id, stock_symbol))
     return 
 
-async def set_sell_trigger(transaction_num, user_id, stock_symbol, amount, **settings):
+async def set_sell_trigger(transaction_num, user_id, stock_symbol, requested_trigger, **settings):
     xml_tree = settings["xml_tree"]
     conn = settings["conn"]
     
-    try:
-        command = UserCommand()
-        attributes = {
-            "timestamp": int(time.time() * 1000), 
-            "server": "DDJK",
-            "transactionNum": transaction_num,
-            "command": "SET_SELL_TRIGGER",
-            "username": user_id,
-            "stockSymbol": stock_symbol,
-            "funds": float(amount)
-        }
-        command.updateAll(**attributes)
-        XMLTree.append(command)
-    except:
-        return
-    
-    cursor.execute( 'SELECT transaction_amount from triggers        '
-                    'WHERE username = %s    '
-                    'AND stock_symbol = %s  '
-                    'AND type = %s;         '
-                    ,(user_id, stock_symbol, 'sell'))
-    try:
-        result = cursor.fetchone()
-    except:
-        conn.rollback()
-        return
-    if result is None:
+    command = UserCommand()
+    attributes = {
+        "timestamp": int(time.time() * 1000), 
+        "server": "DDJK",
+        "transactionNum": int(transaction_num),
+        "command": "SET_SELL_TRIGGER",
+        "username": user_id,
+        "stockSymbol": stock_symbol,
+        "funds": float(requested_trigger)
+    }
+    command.updateAll(**attributes)
+    xml_tree.append(command)
 
-        error = ErrorEvent()
-        attributes = {
-            "timestamp": int(time.time() * 1000), 
-            "server": "DDJK",
-            "transactionNum": transaction_num,
-            "command": "BUY",
-            "username": user_id,
-            "errorMessage": "SET_SELL does not exist"
-        }
-        error.updateAll(**attributes)
-        XMLTree.append(error)
-        return
-    else:
-        cursor.execute( ' UPDATE triggers SET trigger_amount = %s,  '
-                        '        transaction_number = %s            '  
-                        ' WHERE username = %s                       '
-                        ' AND stock_symbol = %s                     '
-                        ' AND type = %s;                            '
-                        ,(amount, transaction_num, user_id, stock_symbol, 'sell'))
-        conn.commit()
-    return 
+    async with conn.transaction():
+    
+        get_existing =  "SELECT transaction_amount, trigger_amount  " \
+                        "FROM triggers                              " \
+                        "WHERE username = $1                        " \
+                        "AND stock_symbol = $2                      " \
+                        "AND type = 'sell';                         "
+
+        # Does SET_SELL order exist for this user/stock combo?
+        existing = await conn.fetchrow(get_existing, user_id, stock_symbol)
+
+        if not existing:
+            error = ErrorEvent()
+            attributes = {
+                "timestamp": int(time.time() * 1000), 
+                "server": "DDJK",
+                "transactionNum": int(transaction_num),
+                "command": "SET_SELL_TRIGGER",
+                "username": user_id,
+                "errorMessage": "SET_SELL does not exist, no action taken"
+            }
+            error.updateAll(**attributes)
+            xml_tree.append(error)
+
+            logger.info("SET_SELL does not exist, no action taken")
+            return
+
+        # This may be None if the trigger has not yet been set.
+        current_trigger = existing["trigger_amount"]
+        transaction_amount = existing["transaction_amount"]
+
+        # This is a sell, and therefore the trigger will only execute when
+        # the price is equal to or higher than the requested value. This
+        # means that the number of stock required will never be more than
+        # the division of the transaction amount by the trigger.
+        total_stock_required = int(transaction_amount / float(requested_trigger))
+
+        if current_trigger:
+            # There were previously stocks subtracted from the user, so we
+            # must figure out how many extra we need to add/subtract.
+            previously_subtracted = int(transaction_amount / current_trigger)
+            difference = total_stock_required - previously_subtracted
+        else:
+            difference = total_stock_required
+
+        # Check if user owns enough stock to carry out this transaction.
+        get_stock_quantity =    "SELECT stock_quantity " \
+                                "FROM stocks           " \
+                                "WHERE username = $1   " \
+                                "AND stock_symbol = $2;"
+
+        stock_owned = await conn.fetchval(get_stock_quantity, user_id, stock_symbol)
+
+        # Difference may be negative, however this check will still pass.
+        if not stock_owned or stock_owned < difference:
+            error = ErrorEvent()
+            attributes = {
+                "timestamp": int(time.time() * 1000), 
+                "server": "DDJK",
+                "transactionNum": int(transaction_num),
+                "command": "SET_SELL_AMOUNT",
+                "username": user_id,
+                "errorMessage": "User does not own enough shares of this type"
+            }
+            error.updateAll(**attributes)
+            xml_tree.append(error)
+            return
+
+        logger.info("User owns enough stocks for transaction %s to proceed.", transaction_num)
+
+        # Negative difference will result in an addition to the account here.
+        stocks_update = " UPDATE stocks                            " \
+                        " SET stock_quantity = stock_quantity - $1 " \
+                        " WHERE username = $2                      " \
+                        " AND stock_symbol = $3                    "
+
+        await conn.execute(stocks_update, difference, user_id, stock_symbol)
+
+
+        triggers_update =   " UPDATE triggers                           " \
+                            " SET trigger_amount = $1,                  " \
+                            "     transaction_number = $2               " \
+                            " WHERE username = $3                       " \
+                            " AND stock_symbol = $4                     " \
+                            " AND type = 'sell';                        "
+
+        await conn.execute(triggers_update, float(requested_trigger), int(transaction_num), user_id, stock_symbol)
 
 # this method is called by an extra thread.  Every QUOTE_LIFESPAN period of time it goes
 # through the triggers table.  For any row that posesses a trigger_value, a quote is
