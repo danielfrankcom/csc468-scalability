@@ -232,7 +232,7 @@ async def buy(transaction_num, user_id, stock_symbol, amount, **settings):
                             "VALUES " \
                             "('buy', $1, $2, $3, $4, $5, $6);"
 
-        timestamp = round(time.time())
+        timestamp = round(time.time(), 5)
         await conn.execute(reserved_update, user_id, stock_symbol,
                 stock_quantity, price, purchase_price, timestamp)
         logger.debug("Reserved update for %s sucessful.", transaction_num)
@@ -253,20 +253,20 @@ async def buy(transaction_num, user_id, stock_symbol, amount, **settings):
 
 async def _get_latest_buy(user_id, conn):
 
-        select_buy =    "SELECT reservationid, stock_symbol, stock_quantity, amount " \
+    select_buy =    "SELECT reservationid, stock_symbol, stock_quantity, amount " \
+                    "FROM reserved " \
+                    "WHERE type = 'buy' " \
+                    "AND username = $1 " \
+                    "AND timestamp = ( " \
+                        "SELECT MAX(timestamp) " \
                         "FROM reserved " \
                         "WHERE type = 'buy' " \
                         "AND username = $1 " \
-                        "AND timestamp = ( " \
-                            "SELECT MAX(timestamp) " \
-                            "FROM reserved " \
-                            "WHERE type = 'buy' " \
-                            "AND username = $1 " \
-                        ") " \
-                        "AND timestamp > $2;"
+                    ") " \
+                    "AND timestamp > $2;"
 
-        target_timestamp = round(time.time(), 5) - 60
-        return await conn.fetchrow(select_buy, user_id, target_timestamp)
+    target_timestamp = round(time.time(), 5) - 60
+    return await conn.fetchrow(select_buy, user_id, target_timestamp)
 
 async def commit_buy(transaction_num, user_id, **settings):
     xml_tree = settings["xml_tree"]
@@ -373,93 +373,92 @@ async def cancel_buy(transaction_num, user_id, **settings):
     transaction.updateAll(**attributes)
     xml_tree.append(transaction)
 
-def sell(transaction_num, user_id, stock_symbol, amount, conn, XMLTree):
-    cursor = conn.cursor()
+async def sell(transaction_num, user_id, stock_symbol, amount, **settings):
+    xml_tree = settings["xml_tree"]
+    conn = settings["conn"]
 
-    cursor.execute('SELECT username FROM users;')
-    conn.commit()
-    
     command = UserCommand()
     attributes = {
         "timestamp": int(time.time() * 1000), 
         "server": "DDJK",
-        "transactionNum": transaction_num,
+        "transactionNum": int(transaction_num),
         "command": "SELL",
         "username": user_id,
         "stockSymbol": stock_symbol,
         "funds": float(amount)
     }
     command.updateAll(**attributes)
-    XMLTree.append(command)
+    xml_tree.append(command)
 
-    price, stock_symbol, user_id, time_of_quote, cryptokey = quote(transaction_num, user_id, stock_symbol, XMLTree)
+    price, stock_symbol, user_id, time_of_quote, cryptokey = await quote(transaction_num, user_id, stock_symbol, **settings)
 
-    try:
-        test = cursor.fetchall()
-    except:
-        conn.rollback()
+    sell_quantity = int(float(amount) / price)
+    if sell_quantity <= 0:
+        error = ErrorEvent()
+        attributes = {
+            "timestamp": int(time.time() * 1000),
+            "server": "DDJK",
+            "transactionNum": int(transaction_num),
+            "command": "SELL",
+            "username": user_id,
+            "stockSymbol": stock_symbol,
+            "funds": float(amount),
+            "errorMessage": "Amount insufficient to sell at least 1 stock"
+        }
+        error.updateAll(**attributes)
+        xml_tree.append(error)
+
+        logger.info("Amount insufficient to sell at least 1 stock for %s.", transaction_num)
         return
 
-    for i in test:
-        # USER EXISTS
-        if i[0] == user_id:
-            cursor.execute("SELECT stock_quantity FROM stocks WHERE username = %s AND stock_symbol = %s", (user_id, stock_symbol))
-            conn.commit()
-            try:
-                stock_quantity = cursor.fetchall()
-            except:
-                conn.rollback()
-                return
-            stocks_to_sell = int(float(amount)/price)
-            if stock_quantity != []:
-                # User owns enough of the stock to sell the specified amount
-                if stock_quantity[0][0] >= stocks_to_sell and stocks_to_sell != 0:
-                    cursor.execute("UPDATE stocks SET stock_quantity = stock_quantity - %s WHERE username = %s AND stock_symbol = %s", (stocks_to_sell, user_id, stock_symbol,))
-                    conn.commit()
-                    cursor.execute("INSERT INTO reserved (type, username, stock_symbol, stock_quantity, price, amount, timestamp) VALUES (%s, %s, %s, %s, %s, %s, %s);", ('sell', user_id, stock_symbol, stocks_to_sell, price, amount, round(time.time(), 5),))
-                    conn.commit() 
+    assert sell_quantity > 0
 
-                    # create timer, when timer finishes have it cancel the buy
-                    #threading.Timer(QUOTE_LIFESPAN, buy_timeout, args=(user_id, stock_symbol, amount, conn)).start()
-                else:
-                    error = ErrorEvent()
-                    attributes = {
-                        "timestamp": int(time.time() * 1000), 
-                        "server": "DDJK",
-                        "transactionNum": transaction_num,
-                        "command": "BUY",
-                        "username": user_id,
-                        "errorMessage": "User either does not own enough of the stock requested, or the stock is worth more than the price requested to sell" 
-                    }
-                    error.updateAll(**attributes)
-                    XMLTree.append(error)
-                return
-            else:
-                error = ErrorEvent()
-                attributes = {
-                    "timestamp": int(time.time() * 1000), 
-                    "server": "DDJK",
-                    "transactionNum": transaction_num,
-                    "command": "BUY",
-                    "username": user_id,
-                    "errorMessage": "No stock of this type to sell" 
-                }
-                error.updateAll(**attributes)
-                XMLTree.append(error)
-                return
-    # USER DOESN"T EXIST
-    error = ErrorEvent()
-    attributes = {
-        "timestamp": int(time.time() * 1000), 
-        "server": "DDJK",
-        "transactionNum": transaction_num,
-        "command": "BUY",
-        "username": user_id,
-        "errorMessage": "User does not exist" 
-    }
-    error.updateAll(**attributes)
-    XMLTree.append(error)
-    return
+    async with conn.transaction():
+
+        stock_check =   "SELECT stock_quantity FROM stocks " \
+                        "WHERE username = $1 " \
+                        "AND stock_symbol = $2 " \
+                        "AND stock_quantity >= $3;"
+
+        result = await conn.fetchrow(stock_check, user_id, stock_symbol, sell_quantity)
+
+        if not result:
+            error = ErrorEvent()
+            attributes = {
+                "timestamp": int(time.time() * 1000), 
+                "server": "DDJK",
+                "transactionNum": int(transaction_num),
+                "command": "BUY",
+                "username": user_id,
+                "stockSymbol": stock_symbol,
+                "errorMessage": "Stock quantity insufficient to sell requested stock."
+            }
+            error.updateAll(**attributes)
+            xml_tree.append(error)
+
+            logger.info("Funds insufficient to purchase requested stock for %s", transaction_num)
+            return
+
+        sell_price = float(sell_quantity * price)
+
+        stocks_update = "UPDATE stocks " \
+                        "SET stock_quantity = stock_quantity - $1 " \
+                        "WHERE username = $2 " \
+                        "AND stock_symbol = $3;"
+
+        await conn.execute(stocks_update, sell_quantity, user_id, stock_symbol)
+
+        reserved_update =   "INSERT INTO reserved " \
+                            "(type, username, stock_symbol, stock_quantity, price, amount, timestamp) " \
+                            "VALUES " \
+                            "('sell', $1, $2, $3, $4, $5, $6);"
+                            
+        timestamp = round(time.time(), 5)
+        await conn.execute(reserved_update, user_id, stock_symbol,
+                sell_quantity, price, sell_price, timestamp)
+
+        # todo: create timer, when timer finishes have it cancel the buy
+        #threading.Timer(QUOTE_LIFESPAN, buy_timeout, args=(user_id, stock_symbol, amount, conn)).start()
 
 def commit_sell(transaction_num, user_id, conn, XMLTree):
     cursor = conn.cursor()
