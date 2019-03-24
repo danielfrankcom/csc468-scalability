@@ -107,7 +107,7 @@ async def add(transaction_num, user_id, amount, **settings):
 
 # Helper function - used to cancel buy orders after they timeout
 def _buy_timeout(user_id, stock_symbol, dollar_amount, conn, XMLTree):
-    # todo
+    # todo re-implement with async, and add sell
     cursor = conn.cursor()
 
     cursor.execute('SELECT * FROM reserved WHERE    '
@@ -607,7 +607,7 @@ async def set_buy_amount(transaction_num, user_id, stock_symbol, amount, **setti
         balance = await conn.fetchval(balance_check, user_id)
         logger.debug("Balance of %s: %.02f", user_id, balance)
 
-        if balance < difference:
+        if not balance or balance < difference:
             error = ErrorEvent()
             attributes = {
                 "timestamp": int(time.time() * 1000), 
@@ -686,7 +686,7 @@ async def cancel_set_buy(transaction_num, user_id, stock_symbol, **settings):
         # Does SET_BUY order exist for this user/stock combo?
         refund_amount = await conn.fetchval(get_existing, user_id, stock_symbol)
 
-        if refund_amount is None:
+        if not refund_amount:
             error = ErrorEvent()
             attributes = {
                 "timestamp": int(time.time() * 1000), 
@@ -758,7 +758,7 @@ async def set_buy_trigger(transaction_num, user_id, stock_symbol, amount, **sett
         # Does SET_BUY order exist for this user/stock combo?
         existing = await conn.fetchval(get_existing, user_id, stock_symbol)
 
-        if existing is None:
+        if not existing:
             error = ErrorEvent()
             attributes = {
                 "timestamp": int(time.time() * 1000), 
@@ -788,73 +788,82 @@ async def set_buy_trigger(transaction_num, user_id, stock_symbol, amount, **sett
 #      determining whether user owns enough stock to create set_sell order
 #   Also, it is now apparent this logic needs to change.  amount is a dollar amount, this has 
 #   been written under the assumption that it is a number of stock
-def set_sell_amount(transaction_num, user_id, stock_symbol, amount, conn, XMLTree):
-    cursor = conn.cursor()
+async def set_sell_amount(transaction_num, user_id, stock_symbol, amount, **settings):
+    xml_tree = settings["xml_tree"]
+    conn = settings["conn"]
     
     command = UserCommand()
     attributes = {
         "timestamp": int(time.time() * 1000), 
         "server": "DDJK",
-        "transactionNum": transaction_num,
+        "transactionNum": int(transaction_num),
         "command": "SET_SELL_AMOUNT",
         "username": user_id,
         "stockSymbol": stock_symbol,
         "funds": float(amount)
     }
     command.updateAll(**attributes)
-    XMLTree.append(command)
+    xml_tree.append(command)
 
-    # verify amount is an integer value
-    try:
-        amount = int(amount)
-    except ValueError:
-        print('invalid amount of stock, must input integer values to sell')
-        return
+    async with conn.transaction():
 
-    # check if user owns enough stock to carry out this transaction
-    cursor.execute( 'SELECT stock_quantity from stocks      '
-                    'WHERE username = %s                    '
-                    'AND stock_symbol = %s;                 '
-                    ,(user_id, stock_symbol))
-    try:
-        shares_owned = cursor.fetchone()
-    except:
-        conn.rollback()
-        return
-    if shares_owned is None:
+        # check if user owns enough stock to carry out this transaction
+        get_stock_quantity =    "SELECT stock_quantity " \
+                                "FROM stocks           " \
+                                "WHERE username = $1   " \
+                                "AND stock_symbol = $2;"
+
+        stock_owned = await conn.fetchval(get_stock_quantity, user_id, stock_symbol)
+
+        if not stock_owned:
+            error = ErrorEvent()
+            attributes = {
+                "timestamp": int(time.time() * 1000), 
+                "server": "DDJK",
+                "transactionNum": int(transaction_num),
+                "command": "SET_SELL_AMOUNT",
+                "username": user_id,
+                "errorMessage": "User owns no shares of this type"
+            }
+            error.updateAll(**attributes)
+            xml_tree.append(error)
+            return
+
+        sell_price = stock_owned
         
-        error = ErrorEvent()
-        attributes = {
-            "timestamp": int(time.time() * 1000), 
-            "server": "DDJK",
-            "transactionNum": transaction_num,
-            "command": "BUY",
-            "username": user_id,
-            "errorMessage": "User owns no shares of this type"
-        }
-        error.updateAll(**attributes)
-        XMLTree.append(error)
-        return
-    elif shares_owned[0] < amount:
-        
-        error = ErrorEvent()
-        attributes = {
-            "timestamp": int(time.time() * 1000), 
-            "server": "DDJK",
-            "transactionNum": transaction_num,
-            "command": "BUY",
-            "username": user_id,
-            "errorMessage": "User dooes not own enough shares of this type"
-        }
-        error.updateAll(**attributes)
-        XMLTree.append(error)       
-        return
-    else:   # user owns sufficient shares to proceed, so remove them from user account and create order
-        cursor.execute( ' UPDATE stocks                 '
-                        ' SET stock_quantity = %s      '
-                        ' WHERE username = %s           '
-                        ' AND stock_symbol = %s         '
-                        ,(amount, user_id, stock_symbol))
+        if stock_owned < amount:
+            error = ErrorEvent()
+            attributes = {
+                "timestamp": int(time.time() * 1000), 
+                "server": "DDJK",
+                "transactionNum": int(transaction_num),
+                "command": "BUY",
+                "username": user_id,
+                "errorMessage": "User does not own enough shares of this type"
+            }
+            error.updateAll(**attributes)
+            xml_tree.append(error)       
+            return
+
+        # user owns sufficient shares to proceed, so remove them from user account and create order
+        stocks_update = " UPDATE stocks                            " \
+                        " SET stock_quantity = stock_quantity - $1 " \
+                        " WHERE username = $2                      " \
+                        " AND stock_symbol = $3                    "
+
+        await conn.execute(stocks_update, amount, user_id, stock_symbol)
+
+
+	# If the order existed already, update it with the new BUY_AMOUNT, else create new record.
+        triggers_update =   "INSERT INTO triggers                                                   " \
+                            "(username, stock_symbol, type, transaction_amount, transaction_number) " \
+                            "VALUES ($1, $2, 'sell', $3, $4)                                        " \
+                            "ON CONFLICT (username, stock_symbol, type) DO UPDATE                   " \
+                            "SET                                                                    " \
+                            "transaction_amount = $3,                                               " \
+                            "transaction_number = $4;                                               "
+
+
         # Does SET_SELL order exist for this user/stock combo?  If yes, modify record, else create new one
         cursor.execute( 'SELECT transaction_amount     '
                         'FROM triggers              '
@@ -878,11 +887,10 @@ def set_sell_amount(transaction_num, user_id, stock_symbol, amount, conn, XMLTre
                             ' AND stock_symbol = %s                                             '
                             ' AND type = %s                                                     '
                             ,(amount, transaction_num, user_id, stock_symbol, 'sell'))
-        conn.commit()
-    return
 
-def cancel_set_sell(transaction_num, user_id, stock_symbol, conn, XMLTree):
-    cursor = conn.cursor()
+async def cancel_set_sell(transaction_num, user_id, stock_symbol, **settings):
+    xml_tree = settings["xml_tree"]
+    conn = settings["conn"]
     
     command = UserCommand()
     attributes = {
@@ -933,8 +941,9 @@ def cancel_set_sell(transaction_num, user_id, stock_symbol, conn, XMLTree):
                         ,(stock_amount_to_refund, user_id, stock_symbol))
     return 
 
-def set_sell_trigger(transaction_num, user_id, stock_symbol, amount, conn, XMLTree):
-    cursor = conn.cursor()
+async def set_sell_trigger(transaction_num, user_id, stock_symbol, amount, **settings):
+    xml_tree = settings["xml_tree"]
+    conn = settings["conn"]
     
     try:
         command = UserCommand()

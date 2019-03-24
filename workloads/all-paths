@@ -31,4 +31,5 @@
 [31] SET_BUY_TRIGGER,aoeuihtnsa,BAS,20.15
 [32] SET_BUY_TRIGGER,aoeuihtnsa,BAS,15.66
 [33] SET_BUY_TRIGGER,sthtohanou,BAS,10.00
-[34] DUMPLOG,./testLOG
+[34] SET_BUY_AMOUNT,snthuocage,BOD,12.45
+[35] DUMPLOG,./testLOG
