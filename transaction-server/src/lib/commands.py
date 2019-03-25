@@ -8,8 +8,10 @@ import os
 
 QUOTE_LIFESPAN = 60 # Time a quote is valid for (60 in production).
 
-QUOTE_CACHE_HOST = "192.168.1.249"
-QUOTE_CACHE_PORT = 6000
+#QUOTE_CACHE_HOST = "192.168.1.249"
+#QUOTE_CACHE_PORT = 6000
+QUOTE_CACHE_HOST = "quoteserve.seng.uvic.ca"
+QUOTE_CACHE_PORT = 4444
 QUOTE_SERVER_PRESENT = os.environ['http_proxy']
 
 logger = logging.getLogger(__name__)
@@ -104,12 +106,11 @@ async def get_quote(user_id, stock_symbol):
 
         writer.write(request.encode())
 
-        raw = await reader.recv(1024).decode()
-        result = reader.split("\n")[0]
+        raw = await reader.read(1024)
+        decoded = raw.decode()
+        result = decoded.split("\n")[0]
 
         writer.close()
-
-        return result
 
     else:
         # This sleep will mock production delays
