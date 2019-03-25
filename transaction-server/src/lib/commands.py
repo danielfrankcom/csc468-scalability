@@ -8,7 +8,7 @@ import os
 
 QUOTE_LIFESPAN = 10 # Time a quote is valid for (60 in production).
 
-QUOTE_CACHE_HOST = "quote-cache"
+QUOTE_CACHE_HOST = "192.168.1.249"
 QUOTE_CACHE_PORT = 6000
 QUOTE_SERVER_PRESENT = os.environ['http_proxy']
 
