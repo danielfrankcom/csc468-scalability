@@ -6,7 +6,7 @@ import logging
 import time
 import os
 
-QUOTE_LIFESPAN = 60 # Time a quote is valid for (60 in production).
+QUOTE_LIFESPAN = 10 # Time a quote is valid for (60 in production).
 
 QUOTE_CACHE_HOST = "quote-cache"
 QUOTE_CACHE_PORT = 6000
@@ -21,7 +21,7 @@ loop = asyncio.get_event_loop()
 # processing any transactions.
 reservation_timestamp_queue = None
 
-async def _reservation_timeout_handler(loop, pool):
+async def reservation_timeout_handler(loop, pool):
     """Helper function - used to cancel buy/sell orders after they timeout."""
 
     # Note that the expiry times stored in the queue do not necessarily correlate
@@ -79,11 +79,11 @@ async def _reservation_timeout_handler(loop, pool):
 
                     else:
 
-                        stock_update =  "UPDATE stocks " \
+                        stocks_update = "UPDATE stocks " \
                                         "SET stock_quantity = stock_quantity + $1 " \
                                         "WHERE username = $2 " \
                                         "AND stock_symbol = $3;"
-                        await conn.execute(stock_update, reservation["stock_quantity"],
+                        await conn.execute(stocks_update, reservation["stock_quantity"],
                                 reservation["username"], reservation["stock_symbol"])
 
         expired = True
@@ -161,7 +161,7 @@ async def add(transaction_num, user_id, amount, **settings):
     query =  "INSERT INTO users (username, balance) " \
              "VALUES ($1, $2) " \
              "ON CONFLICT (username) DO UPDATE " \
-             "SET balance = (users.balance + $2) " \
+             "SET balance = users.balance + $2 " \
              "WHERE users.username = $1;"
 
     logger.info("Executing add command for transaction %s", transaction_num)
@@ -337,14 +337,14 @@ async def commit_buy(transaction_num, user_id, **settings):
             logger.info("No buy to commit for %s", transaction_num)
             return
 
-        stock_update =  "INSERT INTO stocks (username, stock_symbol, stock_quantity) " \
+        stocks_update = "INSERT INTO stocks (username, stock_symbol, stock_quantity) " \
                         "VALUES ($1, $2, $3) " \
                         "ON CONFLICT (username, stock_symbol) DO UPDATE " \
-                        "SET stock_quantity = (stocks.stock_quantity + $3) " \
+                        "SET stock_quantity = stocks.stock_quantity + $3 " \
                         "WHERE stocks.username = $1 " \
                         "AND stocks.stock_symbol = $2;"
         
-        await conn.execute(stock_update, user_id, selected["stock_symbol"], selected["stock_quantity"])
+        await conn.execute(stocks_update, user_id, selected["stock_symbol"], selected["stock_quantity"])
         
         reservation_delete =    "DELETE FROM reserved " \
                                 "WHERE reservationid = $1;"
@@ -586,12 +586,12 @@ async def cancel_sell(transaction_num, user_id, **settings):
             logger.info("No sell to cancel for %s", transaction_num)
             return
 
-        stock_update =  "UPDATE stocks " \
+        stocks_update = "UPDATE stocks " \
                         "SET stock_quantity = stock_quantity + $1 " \
                         "WHERE username = $2 " \
                         "AND stock_symbol = $3;"
 
-        await conn.execute(stock_update, selected["stock_quantity"], user_id, selected["stock_symbol"])
+        await conn.execute(stocks_update, selected["stock_quantity"], user_id, selected["stock_symbol"])
 
         reservation_delete =    "DELETE FROM reserved " \
                                 "WHERE reservationid = $1;"
@@ -1112,126 +1112,111 @@ async def set_sell_trigger(transaction_num, user_id, stock_symbol, requested_tri
 
         await conn.execute(triggers_update, float(requested_trigger), int(transaction_num), user_id, stock_symbol)
 
-# this method is called by an extra thread.  Every QUOTE_LIFESPAN period of time it goes
-# through the triggers table.  For any row that posesses a trigger_value, a quote is
-# obtained for that stock and if appropriate the buy/sell is triggered
-def trigger_maintainer(conn, XMLTree):
-    cursor = conn.cursor()
+async def _process_trigger(record, pool, xml_tree):
 
-    cursor.execute('SELECT * FROM triggers WHERE trigger_amount IS NOT NULL;')
-    try:
-        results = cursor.fetchall() # NOTE: this will not scale - we may have HUGE numbers of rows later
-                                    # I've done this now though to avoid having stuff on cursor's buffer
-    except:
-        conn.rollback()
-        return
-    print("running trigger_maintainer")
-    for row in results:
-        print("row from 'triggers' as it is read:", row)
-        user_id = row[0]
-        stock_symbol = row[1]
-        buy_or_sell = row[2]
-        trigger_amount = row[3]
-        transaction_amount = row[4]
-        transaction_num= row[5]
-        current_price = quote(transaction_num, user_id, stock_symbol, XMLTree)[0]
+    async with pool.acquire() as conn:
+        async with conn.transaction():
 
-        # Debugging data
-        print("row details: user_id:", user_id, 
-            "stock_symbol:", stock_symbol, 
-            "buy_or_sell:", buy_or_sell, 
-            "trigger_amount:", trigger_amount, 
-            "transaction_amount:", transaction_amount, 
-            "transaction_number: ", transaction_num, 
-            "current_price:", current_price)
+            # Check that the provided transaction still exists, as it is possible
+            # that it has been cancelled since the previous transaction.
+            trigger_check = "SELECT transaction_number FROM triggers " \
+                            "WHERE transaction_number = $1;          "
 
-        if buy_or_sell == 'buy' and current_price <= trigger_amount: # trigger the buy
-            num_stocks_to_buy = int(transaction_amount/current_price)
-            leftover_cash = transaction_amount - (current_price * num_stocks_to_buy)
-
-            # if user already had this stock, then update amount
-            cursor.execute( 'SELECT stock_quantity from stocks  '
-                            'WHERE username = %s                '
-                            'AND stock_symbol = %s              '
-                            ,(user_id, stock_symbol))
-            try:
-                result = cursor.fetchone()
-            except:
-                conn.rollback()
+            exists = await conn.fetchval(trigger_check, record["transaction_number"])
+            if not exists:
+                # Transaction has been cancelled,
+                # silently exit.
                 return
 
-            if result is None: # the user had none of this stock previously
-                cursor.execute( 'INSERT INTO stocks (username, stock_symbol, stock_quantity)    ' 
-                                'VALUES (%s, %s, %s);                                       '
-                                ,(user_id, stock_symbol, num_stocks_to_buy))
-            else: # the user already had this type of stock
+            settings = {"xml_tree": xml_tree}
+            results = await quote(record["transaction_number"], record["username"], record["stock_symbol"], **settings)
+            price = results[0]
 
-                # purchase the stocks
-                cursor.execute( 'UPDATE stocks                              '
-                                'SET stock_quantity = stock_quantity + %s   '
-                                'WHERE username = %s                        '
-                                'AND stock_symbol = %s;                     '
-                                ,(num_stocks_to_buy, user_id, stock_symbol))
+            trigger_amount = record["trigger_amount"]
+            transaction_amount = record["transaction_amount"]
 
-            # credit user account leftover cash
-            cursor.execute( 'UPDATE users SET balance = balance + %s        '
-                            'WHERE username = %s                            '
-                            ,(leftover_cash, user_id))
+            if record["type"] == "buy" and price <= trigger_amount:
+                # Buy has been "triggered"
 
+                stocks_update = "INSERT INTO stocks (username, stock_symbol, stock_quantity) " \
+                                "VALUES ($1, $2, $3) " \
+                                "ON CONFLICT (username, stock_symbol) DO UPDATE " \
+                                "SET stock_quantity = stocks.stock_quantity + $3 " \
+                                "WHERE stocks.username = $1 " \
+                                "AND stocks.stock_symbol = $2;"
 
-            transaction = AccountTransaction()
-            attributes = {
-                "timestamp": int(time.time() * 1000), 
-                "server": "DDJK",
-                "transactionNum": transaction_num,
-                "action": "add", 
-                "username": user_id,
-                "funds": float(leftover_cash)
-            }
-            transaction.updateAll(**attributes)
-            XMLTree.append(transaction)
+                stock_quantity = int(transaction_amount / price)
+                await conn.execute(stocks_update, record["username"], record["stock_symbol"], stock_quantity)
 
-            # remove the trigger
-            cursor.execute( 'DELETE FROM triggers   '
-                            'WHERE username = %s     '
-                            'AND stock_symbol = %s  '
-                            'AND type = %s;         '
-                            ,(user_id, stock_symbol, buy_or_sell))
-            conn.commit()
+                balance_addition = transaction_amount - (price * stock_quantity)
 
-        # NOTE: this method is still using the incorrect logic - it assums amount == num of stock
-        # When making the C++ version, correct the logic to assume amount == dollar amount
-        elif buy_or_sell == 'sell' and current_price >= trigger_amount: # trigger the sell
-            cash_from_sale = current_price * transaction_amount
-            # credit user account from sale
-            cursor.execute( 'UPDATE users SET balance = balance + %s    '
-                            'WHERE username = %s;                       '
-                            ,(cash_from_sale, user_id))
+            elif record["type"] == "sell" and price >= trigger_amount:
+                # Sell has been "triggered"
 
-            transaction = AccountTransaction()
-            attributes = {
-                "timestamp": int(time.time() * 1000), 
-                "server": "DDJK",
-                "transactionNum": transaction_num,
-                "action": "add", 
-                "username": user_id,
-                "funds": float(cash_from_sale)
-            }
-            transaction.updateAll(**attributes)
-            XMLTree.append(transaction)
+                num_stock = int(transaction_amount / trigger_amount)
+                balance_addition = num_stock * price
 
+            else:
+                # We do not want to run the remainder
+                # of the code in this method.
+                return
 
-            # remove the trigger
-            cursor.execute( 'DELETE FROM triggers   '
-                            'WHERE username = %s     '
-                            'AND stock_symbol = %s  '
-                            'AND type = %s;         '
-                            ,(user_id, stock_symbol, buy_or_sell))
+            users_update =  "UPDATE users               " \
+                            "SET balance = balance + $1 " \
+                            "WHERE username = $2;       "
 
-    # recurse, but using another thread.  I'm not sure, but I believe this avoids busy-waiting 
-    # even on the new thread.  This needs more looking into to be sure if it's optimal
-    #threading.Timer(QUOTE_LIFESPAN, trigger_maintainer, args=(conn)).start()
+            await conn.execute(users_update, balance_addition, record["username"])
 
+            triggers_update =   "DELETE FROM triggers   " \
+                                "WHERE username = $1    " \
+                                "AND stock_symbol = $2  " \
+                                "AND type = $3;         "
+
+            await conn.execute(triggers_update, record["username"], record["stock_symbol"], record["type"])
+
+    transaction = AccountTransaction()
+    attributes = {
+        "timestamp": int(time.time() * 1000), 
+        "server": "DDJK",
+        "transactionNum": record["transaction_number"],
+        "action": "add", 
+        "username": record["username"],
+        "funds": float(balance_addition)
+    }
+    transaction.updateAll(**attributes)
+    xml_tree.append(transaction)
+
+async def trigger_maintainer(pool, xml_tree):
+
+    while True:
+        start_time = round(loop.time())
+
+        async with pool.acquire() as conn:
+            async with conn.transaction():
+
+                get_triggers =  "SELECT * FROM triggers             " \
+                                "WHERE trigger_amount IS NOT NULL;  "
+
+                triggers = await conn.fetch(get_triggers)
+
+        # The list of triggers is no longer in a transaction, so we must be careful
+        # how we deal with them. Within each async task, we will check whether or
+        # not the trigger still exists in the context of the new transaction.
+
+        logging.info("Trigger maintainer: %s triggers found to check.", len(triggers))
+
+        tasks = [_process_trigger(record, pool, xml_tree) for record in triggers]
+        await asyncio.gather(*tasks)
+
+        logging.debug("Finished processing triggers")
+        
+        now = round(loop.time())
+        sleep_time = QUOTE_LIFESPAN - (now - start_time)
+        logging.debug("Trigger maintainer sleeping for %s seconds.", sleep_time)
+        await asyncio.sleep(sleep_time)
+        logging.debug("Trigger maintainer woke up")
+
+# Deprecated.
 def dumplog(transaction_num, filename, XMLTree):
     command = UserCommand()
     attributes = {
@@ -1243,10 +1228,7 @@ def dumplog(transaction_num, filename, XMLTree):
     command.updateAll(**attributes)
     XMLTree.append(command)
 
-    # todo: verify if this can be removed - Daniel
-    #time.sleep(30) # hack - fix me
-    #XMLTree.write(filename)
-
+# Deprecated.
 def dumplog_user(transaction_num, user_id, filename, XMLTree):
     command = UserCommand()
     attributes = {
@@ -1259,10 +1241,7 @@ def dumplog_user(transaction_num, user_id, filename, XMLTree):
     command.updateAll(**attributes)
     XMLTree.append(command)
 
-    # This basically won't work at all atm - Daniel
-    #time.sleep(30) # hack - fix me
-    #XMLTree.writeFiltered(filename, user_id)
-
+# Deprecated.
 def display_summary(transaction_num, user_id, XMLTree):
     command = UserCommand()
     attributes = {

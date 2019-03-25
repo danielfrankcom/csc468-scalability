@@ -42,16 +42,18 @@ ERROR_PATTERN = re.compile(r"^\[(\d+)\] ([A-Z_]+),([^ ,]+)")
 
 class Processor:
 
-    # todo: move to database
-    xml_tree = LogBuilder("/out/testLOG")
-
     def _db_available(self):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             return s.connect_ex((DB_HOST, DB_PORT)) == 0
 
     def __init__(self, loop):
+        logger.info("Processor object being created.")
+
         self.users = dict()
-        logger.info("Processor object created.")
+
+        # todo: The XML logger should really be moved to a
+        # database to facilitate DUMPLOGs properly.
+        self.xml_tree = LogBuilder("/out/testLOG")
 
         # It is possible that the postgres container has started
         # but is not ready for connections. We poll until it is
@@ -83,9 +85,8 @@ class Processor:
                 continue
 
         loop = asyncio.get_event_loop()
-        loop.create_task(commands._reservation_timeout_handler(loop, self.pool))
-
-        # todo: will start timer thread here
+        loop.create_task(commands.reservation_timeout_handler(loop, self.pool))
+        loop.create_task(commands.trigger_maintainer(self.pool, self.xml_tree))
 
     def _check_transaction(self, transaction):
         for function, pattern in PROCESSORS:
@@ -106,7 +107,8 @@ class Processor:
 
         function, groups = result
 
-        # todo: dumplog has no user
+        # Note that we are not expecting the DUMPLOG command at the moment,
+        # as it contains no username.
         username = groups[1]
         logger.debug("Username %s found for %s.", username, transaction)
 
