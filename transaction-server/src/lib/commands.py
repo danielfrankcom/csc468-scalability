@@ -6,7 +6,7 @@ import logging
 import time
 import os
 
-QUOTE_LIFESPAN = 10 # Time a quote is valid for (60 in production).
+QUOTE_LIFESPAN = 60 # Time a quote is valid for (60 in production).
 
 QUOTE_CACHE_HOST = "192.168.1.249"
 QUOTE_CACHE_PORT = 6000
@@ -102,7 +102,7 @@ async def get_quote(user_id, stock_symbol):
     if QUOTE_SERVER_PRESENT:
         reader, writer = await asyncio.open_connection(QUOTE_CACHE_HOST, QUOTE_CACHE_PORT)
 
-        writer.write(query.encode())
+        writer.write(request.encode())
 
         raw = await reader.recv(1024).decode()
         result = reader.split("\n")[0]
