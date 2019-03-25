@@ -126,7 +126,7 @@
             <!-- Nav Item - User Information -->
             <li class="nav-item dropdown no-arrow">
               <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                <img class="img-profile rounded-circle" src="https://source.unsplash.com/QAB-WJcbgJk/60x60">
+                <img class="img-profile rounded-circle" src="https://images.unsplash.com/photo-1534951009808-766178b47a4f?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=1050&q=80">
               </a>
               <!-- Dropdown - User Information -->
               <div class="dropdown-menu dropdown-menu-right shadow animated--grow-in" aria-labelledby="userDropdown">
@@ -157,7 +157,7 @@
                 <div class="card-body">
                   <form>
                     <div class="form-group">
-                      <label for="buy-stock">Stock</label>
+                      <label for="buy-stock">Stock Symbol</label>
                       <input type="stock-name" class="form-control" id="buy-stock" placeholder="Stock Name">
                     </div>
                     <div class="form-group">
@@ -269,143 +269,141 @@
                   <div class="card-header py-3">
                     <h6 class="m-0 font-weight-bold text-primary">PREFERENCES</h6>
                   </div>
-                  <div class="card shadow mb-4">
-                    <div class="card-body">
-                      <div class="row">
-                        <!-- FIRST COLUMN -->
-                        <div class="col-xl-4 col-lg-4">
-                          <!-- SELL -->
-                          <div class="card shadow mb-4">
-                            <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
-                              <h6 class="m-0 font-weight-bold text-primary">SET BUY TRIGGER</h6>
-                            </div>
-                            <!-- Card Body -->
-                            <div class="card-body">
-                              <form>
-                                  <div class="form-group">
-                                      <label for="buy-trigger-stock">Stock Symbol</label>
-                                      <input type="stock-name" class="form-control" id="buy-trigger-stock" placeholder="Stock Symbol">
-                                  </div>
-                                  <div class="form-group">
-                                      <label for="buy-trigger-dollar-amount">Dollar Amount</label>
-                                      <input type="stock-quantity" class="form-control" id="buy-trigger-dollar-amount" placeholder="Dollar Amount">
-                                  </div>
-                                  <button type="submit" onclick="set_buy_trigger()" class="btn btn-primary">Submit</button>
-                              </form>
-                            </div>
+                  <div class="card-body">
+                    <div class="row">
+                      <!-- FIRST COLUMN -->
+                      <div class="col-xl-4 col-lg-4">
+                        <!-- SELL -->
+                        <div class="card shadow mb-4">
+                          <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                            <h6 class="m-0 font-weight-bold text-primary">SET BUY TRIGGER</h6>
                           </div>
-                          <!-- SET BUY AMOUNT -->
-                          <div class="card shadow mb-4">
-                              <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
-                                <h6 class="m-0 font-weight-bold text-primary">SET SELL TRIGGER</h6>
-                              </div>
-                              <!-- Card Body -->
-                              <div class="card-body">
-                                  <form>
-                                      <div class="form-group">
-                                          <label for="sell-trigger-stock">Stock Symbol</label>
-                                          <input type="stock-name" class="form-control" id="sell-trigger-stock" placeholder="Stock Symbol">
-                                      </div>
-                                      <div class="form-group">
-                                          <label for="sell-trigger-dollar-amount">Dollar Amount</label>
-                                          <input type="stock-quantity" class="form-control" id="sell-trigger-dollar-amount" placeholder="Dollar Amount">
-                                      </div>
-                                      <button type="submit" onclick="set_sell_trigger()" class="btn btn-primary">Submit</button>
-                                  </form>
-                              </div>
-                            </div>
-                        </div>
-                        <!-- SECOND COLUMN -->
-                        <div class="col-xl-4 col-lg-4">
-                          <!-- SET BUY AMOUNT -->
-                          <div class="card shadow mb-4">
-                            <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
-                              <h6 class="m-0 font-weight-bold text-primary">SET BUY AMOUNT</h6>
-                            </div>
-                            <!-- Card Body -->
-                            <div class="card-body">
-                              <form>
-                                  <div class="form-group">
-                                      <label for="set-buy-stock-sym">Stock Symbol</label>
-                                      <input type="stock-name" class="form-control" id="set-buy-stock-sym" placeholder="Stock Symbol">
-                                  </div>
-                                  <div class="form-group">
-                                      <label for="set-buy-dollar-amount">Dollar Amount</label>
-                                      <input type="stock-quantity" class="form-control" id="set-buy-dollar-amount" placeholder="Dollar Amount">
-                                  </div>
-                                  <button type="submit" onclick="set_buy_amount()" class="btn btn-primary">Submit</button>
-                              </form>
-                            </div>
-                          </div>
-                          <!-- SET SELL AMOUNT -->
-                          <div class="card shadow mb-4">
-                            <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
-                              <h6 class="m-0 font-weight-bold text-primary">SET SELL AMOUNT</h6>
-                            </div>
-                            <!-- Card Body -->
-                            <div class="card-body">
-                              <form>
-                                  <div class="form-group">
-                                      <label for="set-sell-stock-sym">Stock Symbol</label>
-                                      <input type="stock-name" class="form-control" id="set-sell-stock-sym" placeholder="Stock Symbol">
-                                  </div>
-                                  <div class="form-group">
-                                      <label for="set-sell-dollar-amount">Dollar Amount</label>
-                                      <input type="amount" class="form-control" id="set-sell-dollar-amount" placeholder="Dollar Amount">
-                                  </div>
-                                  <button type="submit" onclick="set_sell_amount()" class="btn btn-primary">Submit</button>
-                              </form>
-                            </div>
+                          <!-- Card Body -->
+                          <div class="card-body">
+                            <form>
+                                <div class="form-group">
+                                    <label for="buy-trigger-stock">Stock Symbol</label>
+                                    <input type="stock-name" class="form-control" id="buy-trigger-stock" placeholder="Stock Symbol">
+                                </div>
+                                <div class="form-group">
+                                    <label for="buy-trigger-dollar-amount">Dollar Amount</label>
+                                    <input type="stock-quantity" class="form-control" id="buy-trigger-dollar-amount" placeholder="Dollar Amount">
+                                </div>
+                                <button type="submit" onclick="set_buy_trigger()" class="btn btn-primary">Submit</button>
+                            </form>
                           </div>
                         </div>
-                        <!-- THIRD COLUMN -->
-                        <div class="col-xl-4 col-lg-4">
-                            <!-- CANCEL SET BUY -->
-                            <div class="card shadow mb-4">
-                              <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
-                                <h6 class="m-0 font-weight-bold text-primary">CANCEL SET BUY</h6>
-                              </div>
-                              <!-- Card Body -->
-                              <div class="card-body">
+                        <!-- SET BUY AMOUNT -->
+                        <div class="card shadow mb-4">
+                            <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                              <h6 class="m-0 font-weight-bold text-primary">SET SELL TRIGGER</h6>
+                            </div>
+                            <!-- Card Body -->
+                            <div class="card-body">
                                 <form>
                                     <div class="form-group">
-                                        <label for="cancel-set-buy-stock">Stock Symbol</label>
-                                        <input type="stock-name" class="form-control" id="cancel-set-buy-stock" placeholder="Stock Symbol">
+                                        <label for="sell-trigger-stock">Stock Symbol</label>
+                                        <input type="stock-name" class="form-control" id="sell-trigger-stock" placeholder="Stock Symbol">
                                     </div>
-                                    <button type="submit" onclick="cancel_set_buy()" class="btn btn-primary">Submit</button>
-                                </form>
-                              </div>
-                            </div>
-                            <!-- CANCEL SET SELL -->
-                            <div class="card shadow mb-4">
-                              <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
-                                <h6 class="m-0 font-weight-bold text-primary">CANCEL SET SELL</h6>
-                              </div>
-                              <!-- Card Body -->
-                              <div class="card-body">
-                                <form>
                                     <div class="form-group">
-                                        <label for="sell-stock">Stock Symbol</label>
-                                        <input type="stock-name" class="form-control" id="cancel-set-sell-stock" placeholder="Stock Symbol">
+                                        <label for="sell-trigger-dollar-amount">Dollar Amount</label>
+                                        <input type="stock-quantity" class="form-control" id="sell-trigger-dollar-amount" placeholder="Dollar Amount">
                                     </div>
-                                    <button type="submit" onclick="cancel_set_sell()" class="btn btn-primary">Submit</button>
+                                    <button type="submit" onclick="set_sell_trigger()" class="btn btn-primary">Submit</button>
                                 </form>
-                              </div>
-                            </div>
-                            <!-- CANCEL SET SELL -->
-                            <div class="card shadow mb-4">
-                              <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
-                                <h6 class="m-0 font-weight-bold text-primary">LOG FILE</h6>
-                              </div>
-                              <!-- Card Body -->
-                              <div class="card-body">
-                                <form class="text-center">
-                                  <button type="submit" onclick="create_user_log()" class="btn btn-primary mt-2 mb-2">Create User Log</button>
-                              </form>
-                              </div>
                             </div>
                           </div>
                       </div>
+                      <!-- SECOND COLUMN -->
+                      <div class="col-xl-4 col-lg-4">
+                        <!-- SET BUY AMOUNT -->
+                        <div class="card shadow mb-4">
+                          <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                            <h6 class="m-0 font-weight-bold text-primary">SET BUY AMOUNT</h6>
+                          </div>
+                          <!-- Card Body -->
+                          <div class="card-body">
+                            <form>
+                                <div class="form-group">
+                                    <label for="set-buy-stock-sym">Stock Symbol</label>
+                                    <input type="stock-name" class="form-control" id="set-buy-stock-sym" placeholder="Stock Symbol">
+                                </div>
+                                <div class="form-group">
+                                    <label for="set-buy-dollar-amount">Dollar Amount</label>
+                                    <input type="stock-quantity" class="form-control" id="set-buy-dollar-amount" placeholder="Dollar Amount">
+                                </div>
+                                <button type="submit" onclick="set_buy_amount()" class="btn btn-primary">Submit</button>
+                            </form>
+                          </div>
+                        </div>
+                        <!-- SET SELL AMOUNT -->
+                        <div class="card shadow mb-4">
+                          <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                            <h6 class="m-0 font-weight-bold text-primary">SET SELL AMOUNT</h6>
+                          </div>
+                          <!-- Card Body -->
+                          <div class="card-body">
+                            <form>
+                                <div class="form-group">
+                                    <label for="set-sell-stock-sym">Stock Symbol</label>
+                                    <input type="stock-name" class="form-control" id="set-sell-stock-sym" placeholder="Stock Symbol">
+                                </div>
+                                <div class="form-group">
+                                    <label for="set-sell-dollar-amount">Dollar Amount</label>
+                                    <input type="amount" class="form-control" id="set-sell-dollar-amount" placeholder="Dollar Amount">
+                                </div>
+                                <button type="submit" onclick="set_sell_amount()" class="btn btn-primary">Submit</button>
+                            </form>
+                          </div>
+                        </div>
+                      </div>
+                      <!-- THIRD COLUMN -->
+                      <div class="col-xl-4 col-lg-4">
+                          <!-- CANCEL SET BUY -->
+                          <div class="card shadow mb-4">
+                            <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                              <h6 class="m-0 font-weight-bold text-primary">CANCEL SET BUY</h6>
+                            </div>
+                            <!-- Card Body -->
+                            <div class="card-body">
+                              <form>
+                                  <div class="form-group">
+                                      <label for="cancel-set-buy-stock">Stock Symbol</label>
+                                      <input type="stock-name" class="form-control" id="cancel-set-buy-stock" placeholder="Stock Symbol">
+                                  </div>
+                                  <button type="submit" onclick="cancel_set_buy()" class="btn btn-primary">Submit</button>
+                              </form>
+                            </div>
+                          </div>
+                          <!-- CANCEL SET SELL -->
+                          <div class="card shadow mb-4">
+                            <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                              <h6 class="m-0 font-weight-bold text-primary">CANCEL SET SELL</h6>
+                            </div>
+                            <!-- Card Body -->
+                            <div class="card-body">
+                              <form>
+                                  <div class="form-group">
+                                      <label for="sell-stock">Stock Symbol</label>
+                                      <input type="stock-name" class="form-control" id="cancel-set-sell-stock" placeholder="Stock Symbol">
+                                  </div>
+                                  <button type="submit" onclick="cancel_set_sell()" class="btn btn-primary">Submit</button>
+                              </form>
+                            </div>
+                          </div>
+                          <!-- CANCEL SET SELL -->
+                          <div class="card shadow mb-4">
+                            <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                              <h6 class="m-0 font-weight-bold text-primary">LOG FILE</h6>
+                            </div>
+                            <!-- Card Body -->
+                            <div class="card-body">
+                              <form class="text-center">
+                                <button type="submit" onclick="create_user_log()" class="btn btn-primary mt-2 mb-2">Create User Log</button>
+                            </form>
+                            </div>
+                          </div>
+                        </div>
                     </div>
                   </div>
                 </div>
