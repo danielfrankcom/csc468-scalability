@@ -477,7 +477,6 @@
 </body>
 
 </html>
-
 <script>
     function buy(){
         var username = sessionStorage.getItem('username');
@@ -615,23 +614,24 @@
 
     // Check if stock_symbol is 1-3 characters, and only contains letters.
     function check_stock_name(stock_name){
-        var letters = /^[A-Za-z]+$/;
-        if(!stock_name.match(letters) || stock_name.length <= 0 || stock_name.length > 3){
-            alert("Invalid Input. Please enter a valid Stock Name.");
-            return false;
-        }else{
-            return true;
-        }
+      var letters = /^[A-Za-z]+$/;
+      if(!stock_name.match(letters) || stock_name.length <= 0 || stock_name.length > 3){
+          alert("Invalid Input. Please enter a valid Stock Name.");
+          return false;
+      }else{
+          return true;
+      }
     }
 
     // Check if stock_quantity is a number
     function check_stock_quantity(stock_quantity){
-        if(isNaN(stock_quantity)){
-            alert("Invalid Input. Please enter a valid Stock Quantity.");
-            return false;
-        }else{
-            return true;
-        }
+      var integer = /^\d+$/;
+      if(isNaN(stock_quantity) || !stock_quantity.match(integer)){
+          alert("Invalid Input. Please enter a valid Stock Quantity.");
+          return false;
+      }else{
+          return true;
+      }
     }
 
     function check_dollar_amount(dollar_amount){
