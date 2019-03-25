@@ -102,6 +102,7 @@ class Processor:
     async def register_transaction(self, transaction):
         result = self._check_transaction(transaction)
         if not result:
+            self._log_error(transaction)
             logger.error("Transaction %s did not match any pattern.", transaction)
             return False
 
