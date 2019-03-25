@@ -1,19 +1,5 @@
 version: '3'
 services:
-    adminer:
-        image: michalhosna/adminer:4.7.0
-        depends_on:
-            - postgres
-        restart: on-failure
-        ports:
-            - ${ADMINER_PORT}:8080
-        environment:
-            - ADMINER_DRIVER=pgsql
-            - ADMINER_DB=postgres
-            - ADMINER_SERVER=postgres
-            - ADMINER_USERNAME=${DB_USER}
-            - ADMINER_PASSWORD=${DB_PASS}
-            - ADMINER_AUTOLOGIN=1
     postgres:
         build: database
         restart: on-failure
@@ -22,17 +8,10 @@ services:
             - POSTGRES_PASSWORD=${DB_PASS}
         volumes:
             - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
-    quote-cache:
-        build: quote-cache
-        restart: always
-        ports:
-            - 4444:4444
-            - 6000:6000
     transaction-server:
         build: transaction-server
         depends_on:
             - postgres
-            - quote-cache
         restart: unless-stopped
         ports:
             - ${TRANSACTION_PORT}:5000
