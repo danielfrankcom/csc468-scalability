@@ -22,10 +22,17 @@ services:
             - POSTGRES_PASSWORD=${DB_PASS}
         volumes:
             - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    quote-cache:
+        build: quote-cache
+        restart: always
+        ports:
+            - 4444:4444
+            - 6000:6000
     transaction-server:
         build: transaction-server
         depends_on:
             - postgres
+            - quote-cache
         restart: unless-stopped
         ports:
             - ${TRANSACTION_PORT}:5000
