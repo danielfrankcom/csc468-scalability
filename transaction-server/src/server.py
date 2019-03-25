@@ -82,13 +82,16 @@ class Processor:
                 # Database is still in a non-connectable state.
                 continue
 
+        loop = asyncio.get_event_loop()
+        loop.create_task(commands._reservation_timeout_handler(loop, self.pool))
+
         # todo: will start timer thread here
 
     def _check_transaction(self, transaction):
         for function, pattern in PROCESSORS:
             match = re.match(pattern, transaction)
             if not match:
-                logger.debug("Pattern %s for transaction %s failed.", pattern, transaction)
+                logger.debug("Pattern %s for transaction %s not matched, checking next.", pattern, transaction)
                 continue
 
             groups = match.groups()

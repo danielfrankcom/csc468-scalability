@@ -1,22 +1,97 @@
-import time, datetime
-import random
 from lib.xml_writer import *
-from itertools import count
+from datetime import datetime
 
 import asyncio
-import asyncpg
 import logging
-import math
+import time
 import os
 
-QUOTE_LIFESPAN = 60.0 # period of time a quote is valid for (will be 60.0 for deployed software)
+QUOTE_LIFESPAN = 60 # Time a quote is valid for (60 in production).
 
 QUOTE_CACHE_HOST = "quote-cache"
 QUOTE_CACHE_PORT = 6000
 QUOTE_SERVER_PRESENT = os.environ['http_proxy']
 
 logger = logging.getLogger(__name__)
+loop = asyncio.get_event_loop()
 
+# This must be initialized from the entry point to ensure that
+# the loop matches. It is guaranteed to run before anything
+# tries to access it, as the entry point calls this code before
+# processing any transactions.
+reservation_timestamp_queue = None
+
+async def _reservation_timeout_handler(loop, pool):
+    """Helper function - used to cancel buy/sell orders after they timeout."""
+
+    # Note that the expiry times stored in the queue do not necessarily correlate
+    # with the reservation rows, due to clock drift and the passing of time
+    # between method calls. The queue simply acts as a method to let the handler
+    # go idle, and does not dictate which rows should be removed.
+    # 
+    # When the handler is active, it will remove every row that it can, regardless
+    # of the state of the queue. It is possible that the handler wakes up and has
+    # no reservations to process, as a buy/sell can be committed with no way to
+    # remove the matching timestamp from the queue.
+    global reservation_timestamp_queue
+    reservation_timestamp_queue = asyncio.Queue(loop=loop)
+
+    # Block until the first expiry time is available.
+    expiry_time = await reservation_timestamp_queue.get()
+    logging.debug("Expiry time %s retreived", expiry_time)
+
+    while True:
+        
+        now = round(loop.time())
+        sleep_time = expiry_time - now
+
+        # If this is <= 0 then the method will return right away.
+        logging.debug("Sleeping for %s", sleep_time)
+        await asyncio.sleep(sleep_time)
+        logging.debug("Done sleeping for %s", sleep_time)
+
+        # Loops until all currently expired transactions have been dealt with.
+        while True:
+            async with pool.acquire() as conn:
+                async with conn.transaction():
+
+                    delete_reserved =   "DELETE FROM reserved       " \
+                                        "WHERE timestamp < $1       " \
+                                        "RETURNING *;               " 
+
+                    target_timestamp = round(time.time(), 5)
+                    reservation = await conn.fetchrow(delete_reserved, target_timestamp)
+
+                    # There are no more expired reservations
+                    if not reservation:
+                        logging.debug("No reservations found, breaking")
+                        break
+
+                    logging.debug("Found reservation %s of type %s",
+                            reservation["reservationid"], reservation["type"])
+
+                    if reservation["type"] == "buy":
+
+                        users_update =  "UPDATE users " \
+                                        "SET balance = balance + $1 " \
+                                        "WHERE username = $2;"
+                        await conn.execute(users_update, reservation["amount"], reservation["username"])
+
+                    else:
+
+                        stock_update =  "UPDATE stocks " \
+                                        "SET stock_quantity = stock_quantity + $1 " \
+                                        "WHERE username = $2 " \
+                                        "AND stock_symbol = $3;"
+                        await conn.execute(stock_update, reservation["stock_quantity"],
+                                reservation["username"], reservation["stock_symbol"])
+
+        expired = True
+        while expired:
+            expiry_time = await reservation_timestamp_queue.get()
+            now = round(loop.time())
+            expired = expiry_time <= now 
+            logging.debug("Expired=%s based on now:%s, expiry:%s", expired, now, expiry_time)
 
 async def get_quote(user_id, stock_symbol):
     """Fetch a quote from the quote cache."""
@@ -106,47 +181,22 @@ async def add(transaction_num, user_id, amount, **settings):
     transaction.updateAll(**attributes)
     xml_tree.append(transaction)
 
-# Helper function - used to cancel buy orders after they timeout
-def _buy_timeout(user_id, stock_symbol, dollar_amount, conn, XMLTree):
-    # todo re-implement with async, and add sell
-    cursor = conn.cursor()
+async def _get_latest_reserved(transaction_type, user_id, conn):
 
-    cursor.execute('SELECT * FROM reserved WHERE    '
-        'type = %s AND                              '
-        'username = %s AND                          '
-        'stock_symbol = %s AND                      '
-        'amount = %s;                               ',
-        ('buy', user_id, stock_symbol, dollar_amount))
-    
-    
-    try:
-        result = cursor.fetchone()
-    except:
-        conn.rollback()
-        return
+    selection = "SELECT reservationid, stock_symbol, stock_quantity, amount " \
+                "FROM reserved " \
+                "WHERE type = $1 " \
+                "AND username = $2 " \
+                "AND timestamp = ( " \
+                    "SELECT MAX(timestamp) " \
+                    "FROM reserved " \
+                    "WHERE type = $1 " \
+                    "AND username = $2 " \
+                ") " \
+                "AND timestamp > $3;"
 
-    if result is None: #order has already been manually confirmed or cancelled
-        print("Timer for order is up, but the order is already gone")
-        return
-    else: # the reservation still exists, so delete it and refund the cash back to user's account
-        reservationid = result[0]
-        reserved_cash = result[6]
-        cursor.execute('DELETE FROM reserved WHERE reservationid = %s;', (reservationid,))    
-        cursor.execute('SELECT balance FROM users where username = %s;', (user_id,))
-        try:
-            result = cursor.fetchall()
-        except:
-            conn.rollback()
-            return
-        if result is None:
-            print("Error - user does not exist!")
-            return
-        existing_balance = result[0][0]
-        new_balance = existing_balance + reserved_cash
-        cursor.execute('UPDATE users SET balance = %s WHERE username = %s;', (str(new_balance), (user_id)))
-        conn.commit()        
-        print('buy order timout - the following buy order is now cancelled: ', 
-            user_id, stock_symbol, dollar_amount)
+    target_timestamp = round(loop.time()) # Current time is threshold for expiry.
+    return await conn.fetchrow(selection, transaction_type, user_id, target_timestamp)
 
 async def buy(transaction_num, user_id, stock_symbol, amount, **settings):
     xml_tree = settings["xml_tree"]
@@ -233,10 +283,13 @@ async def buy(transaction_num, user_id, stock_symbol, amount, **settings):
                             "VALUES " \
                             "('buy', $1, $2, $3, $4, $5, $6);"
 
-        timestamp = round(time.time(), 5)
+        timestamp = round(loop.time()) + QUOTE_LIFESPAN # Expiry time.
         await conn.execute(reserved_update, user_id, stock_symbol,
                 stock_quantity, price, purchase_price, timestamp)
         logger.debug("Reserved update for %s sucessful.", transaction_num)
+
+        # Mark for expiry in QUOTE_LIFESPAN seconds.
+        await reservation_timestamp_queue.put(timestamp)
 
     transaction = AccountTransaction()
     attributes = {
@@ -249,26 +302,6 @@ async def buy(transaction_num, user_id, stock_symbol, amount, **settings):
     }
     transaction.updateAll(**attributes)
     xml_tree.append(transaction)
-
-    #threading.Timer(QUOTE_LIFESPAN, buy_timeout, args=(user_id, stock_symbol, amount, conn)).start()
-
-async def _get_latest_reserved(transaction_type, user_id, conn):
-
-    selection = "SELECT reservationid, stock_symbol, stock_quantity, amount " \
-                "FROM reserved " \
-                "WHERE type = $1 " \
-                "AND username = $2 " \
-                "AND timestamp = ( " \
-                    "SELECT MAX(timestamp) " \
-                    "FROM reserved " \
-                    "WHERE type = $1 " \
-                    "AND username = $2 " \
-                ") " \
-                "AND timestamp > $3;"
-
-    target_timestamp = round(time.time(), 5) - 60
-    return await conn.fetchrow(selection, transaction_type, user_id, target_timestamp)
-
 
 async def commit_buy(transaction_num, user_id, **settings):
     xml_tree = settings["xml_tree"]
@@ -455,12 +488,12 @@ async def sell(transaction_num, user_id, stock_symbol, amount, **settings):
                             "VALUES " \
                             "('sell', $1, $2, $3, $4, $5, $6);"
                             
-        timestamp = round(time.time(), 5)
+        timestamp = round(loop.time()) + QUOTE_LIFESPAN # Expiry time.
         await conn.execute(reserved_update, user_id, stock_symbol,
                 sell_quantity, price, sell_price, timestamp)
 
-        # todo: create timer, when timer finishes have it cancel the buy
-        #threading.Timer(QUOTE_LIFESPAN, buy_timeout, args=(user_id, stock_symbol, amount, conn)).start()
+        # Mark for expiry in QUOTE_LIFESPAN seconds.
+        await reservation_timestamp_queue.put(timestamp)
 
 async def commit_sell(transaction_num, user_id, **settings):
     xml_tree = settings["xml_tree"]
@@ -554,11 +587,11 @@ async def cancel_sell(transaction_num, user_id, **settings):
             return
 
         stock_update =  "UPDATE stocks " \
-                        "SET stock_quantity = (stocks.stock_quantity + $3) " \
-                        "WHERE stocks.username = $1 " \
-                        "AND stocks.stock_symbol = $2;"
+                        "SET stock_quantity = stock_quantity + $1 " \
+                        "WHERE username = $2 " \
+                        "AND stock_symbol = $3;"
 
-        await conn.execute(stock_update, user_id, selected["stock_symbol"], selected["stock_quantity"])
+        await conn.execute(stock_update, selected["stock_quantity"], user_id, selected["stock_symbol"])
 
         reservation_delete =    "DELETE FROM reserved " \
                                 "WHERE reservationid = $1;"
@@ -1229,7 +1262,6 @@ def dumplog_user(transaction_num, user_id, filename, XMLTree):
     # This basically won't work at all atm - Daniel
     #time.sleep(30) # hack - fix me
     #XMLTree.writeFiltered(filename, user_id)
-
 
 def display_summary(transaction_num, user_id, XMLTree):
     command = UserCommand()
