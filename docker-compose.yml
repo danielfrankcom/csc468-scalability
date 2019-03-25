@@ -1,13 +1,13 @@
 version: '3'
 services:
     postgres:
-        image: postgres:11.1
+        build: database
         restart: on-failure
         environment:
             - POSTGRES_USER=${DB_USER}
             - POSTGRES_PASSWORD=${DB_PASS}
         volumes:
-            - ./database:/docker-entrypoint-initdb.d/:ro
+            - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     adminer:
         image: michalhosna/adminer:4.7.0
         depends_on:

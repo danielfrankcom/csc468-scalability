@@ -27,8 +27,11 @@ public class Generator {
 
     private static final String[] ADDRESSES = new String[]{
     	"192.168.1.249",
-    	"192.168.1.226",
-    	"192.168.1.223"
+    	"192.168.1.177",
+    	"192.168.1.196",
+    	"192.168.1.207",
+    	"192.168.1.200",
+    	"192.168.1.164"
     };
 
     private static final String URL_PRE = "http://";
@@ -82,6 +85,8 @@ public class Generator {
 	int index = 0;
 	int i;
 
+        final AsyncHttpClient client = Dsl.asyncHttpClient();
+
         for (i = 0; i < numRequests - 1; i++) {
 	    final String body = iterator.next();
 	    final String username = body
@@ -99,29 +104,10 @@ public class Generator {
 		lookup.put(username, host);
 	    }
 
-            requests[i] = Dsl.post(URL_PRE + host + URL_POST)
+            Request request = Dsl.post(URL_PRE + host + URL_POST)
                     .setBody(body)
                     .build();
-        }
-
-        final AsyncHttpClient client = Dsl.asyncHttpClient();
-
-        System.out.println("started");
-
-        final long durationNS = execute(client, requests);
-        final long durationMS = durationNS / NS_IN_MS;
-        final float durationS = durationMS / (float) MS_IN_S;
-
-        System.out.printf("Finished in: %fs.\n", durationS);
-
-        System.exit(0);
-    }
-
-    private static long execute(AsyncHttpClient client, Request... requests) {
-        final long start = System.nanoTime();
-
-        final List<Future<Response>> responses = new ArrayList<>(requests.length);
-        for (Request request : requests) {
+	    
             Future<Response> response = client.executeRequest(request);
 
             final Response actual;
@@ -138,6 +124,24 @@ public class Generator {
                 System.out.printf("Request returned status code %d.\n", statusCode);
                 System.exit(1);
             }
+        }
+
+        System.out.println("started");
+
+        //final long durationNS = execute(client, requests);
+        //final long durationMS = durationNS / NS_IN_MS;
+        //final float durationS = durationMS / (float) MS_IN_S;
+
+        System.out.printf("Finished.\n");
+
+        System.exit(0);
+    }
+
+    private static long execute(AsyncHttpClient client, Request... requests) {
+        final long start = System.nanoTime();
+
+        final List<Future<Response>> responses = new ArrayList<>(requests.length);
+        for (Request request : requests) {
         }
 
         final long finish = System.nanoTime();
