@@ -7,7 +7,7 @@ DROP TABLE IF EXISTS debugevents;
 
 
 CREATE TABLE usercommands (
-    timeof TIMESTAMP NOT NULL PRIMARY KEY,
+    timestamp TIMESTAMP NOT NULL PRIMARY KEY,
 	server VARCHAR(20) NOT NULL,
 	transaction_num INTEGER NOT NULL,
 	command VARCHAR(20) NOT NULL,
@@ -17,7 +17,7 @@ CREATE TABLE usercommands (
 );
 
 CREATE TABLE quoteservers (
-    timeof TIMESTAMP NOT NULL PRIMARY KEY,
+    timestamp TIMESTAMP NOT NULL PRIMARY KEY,
 	server VARCHAR(20) NOT NULL,
 	transaction_num INTEGER NOT NULL,
 	price FLOAT NOT NULL,
@@ -28,7 +28,7 @@ CREATE TABLE quoteservers (
 );
 
 CREATE TABLE accounttransactions (
-    timeof TIMESTAMP NOT NULL PRIMARY KEY,
+    timestamp TIMESTAMP NOT NULL PRIMARY KEY,
 	server VARCHAR(20) NOT NULL,
 	transaction_num INTEGER NOT NULL,
 	action VARCHAR(6) NOT NULL,
@@ -37,7 +37,7 @@ CREATE TABLE accounttransactions (
 );
 
 CREATE TABLE systemevents (
-    timeof TIMESTAMP NOT NULL PRIMARY KEY,
+    timestamp TIMESTAMP NOT NULL PRIMARY KEY,
 	server VARCHAR(20) NOT NULL,
 	transaction_num INTEGER NOT NULL,
 	command VARCHAR(20) NOT NULL,
@@ -47,7 +47,7 @@ CREATE TABLE systemevents (
 );
 
 CREATE TABLE errorevents (
-    timeof TIMESTAMP NOT NULL PRIMARY KEY,
+    timestamp TIMESTAMP NOT NULL PRIMARY KEY,
 	server VARCHAR(20) NOT NULL,
 	transaction_num INTEGER NOT NULL,
 	command VARCHAR(20) NOT NULL,
@@ -58,7 +58,7 @@ CREATE TABLE errorevents (
 );
 
 CREATE TABLE debugevents (
-    timeof TIMESTAMP NOT NULL PRIMARY KEY,
+    timestamp TIMESTAMP NOT NULL PRIMARY KEY,
 	server VARCHAR(20) NOT NULL,
 	transaction_num INTEGER NOT NULL,
 	command VARCHAR(20) NOT NULL,
