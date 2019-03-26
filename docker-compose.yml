@@ -31,8 +31,6 @@ services:
     logging-server:
         build: logging-server
         restart: on-failure
-        links:
-            - rabbitmq
         depends_on:
             - logging-db
             - rabbitmq
