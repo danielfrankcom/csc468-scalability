@@ -1,4 +1,3 @@
-from lib.xml_writer import *
 from datetime import datetime
 
 import traceback
@@ -7,6 +6,7 @@ import logging
 import socket
 import time
 import os
+import json
 
 QUOTE_LIFESPAN = 60 # Time a quote is valid for (60 in production).
 
@@ -176,41 +176,45 @@ async def get_quote(user_id, stock_symbol):
 # quote() is called when a client requests a quote.  It will return a valid price for the
 # stock as requested.
 async def quote(transaction_num, user_id, stock_symbol, **settings):
-    xml_tree = settings["xml_tree"]
+    publisher = settings["publisher"]
 
     # get quote from server/cache
     new_price, time_of_quote, cryptokey, quote_user = await get_quote(user_id, stock_symbol)
 
-    quote = QuoteServer()
-    attributes = {
+    data = {
         "timestamp": int(time.time() * 1000), 
         "server": "DDJK",
-        "transactionNum": int(transaction_num),
+        "transaction_num": int(transaction_num),
         "price": new_price, 
         "username": quote_user,
-        "stockSymbol": stock_symbol,
-        "quoteServerTime": time_of_quote,
-        "cryptokey": cryptokey
+        "stock_symbol": stock_symbol,
+        "quote_server_time": time_of_quote,
+        "crypto_key": cryptokey
     }
-    quote.updateAll(**attributes)
-    xml_tree.append(quote)
+    message = {
+        "type": "quoteServer",
+        "data": data
+    }
+    publisher.publish_message(json.dumps(message))
 
     return new_price, stock_symbol, user_id, time_of_quote, cryptokey
 
 async def add(transaction_num, user_id, amount, **settings):
-    xml_tree = settings["xml_tree"]
+    publisher = settings["publisher"]
     conn = settings["conn"]
 
-    command = UserCommand()
-    attributes = {
+    data = {
         "timestamp": int(time.time() * 1000), 
         "server": "DDJK",
-        "transactionNum": int(transaction_num),
+        "transaction_num": int(transaction_num),
         "command": "ADD",
         "funds": float(amount)
     }
-    command.updateAll(**attributes)
-    xml_tree.append(command)
+    message = {
+        "type": "userCommand",
+        "data": data
+    }
+    publisher.publish(json.dumps(message))
     
     query =  "INSERT INTO users (username, balance) " \
              "VALUES ($1, $2) " \
@@ -223,17 +227,19 @@ async def add(transaction_num, user_id, amount, **settings):
         await conn.execute(query, user_id, float(amount))
         logger.debug("Balance update for %s sucessful.", transaction_num)
         
-    transaction = AccountTransaction()
-    attributes = {
+    data = {
         "timestamp": int(time.time() * 1000), 
         "server": "DDJK",
-        "transactionNum": int(transaction_num),
+        "transaction_num": int(transaction_num),
         "action": "add", 
         "username": user_id,
         "funds": float(amount)
     }
-    transaction.updateAll(**attributes)
-    xml_tree.append(transaction)
+    message = {
+        "type": "accountTransaction",
+        "data": data
+    }
+    publisher.publish(json.dumps(message))
 
 async def _get_latest_reserved(transaction_type, user_id, conn):
 
@@ -253,39 +259,43 @@ async def _get_latest_reserved(transaction_type, user_id, conn):
     return await conn.fetchrow(selection, transaction_type, user_id, target_timestamp)
 
 async def buy(transaction_num, user_id, stock_symbol, amount, **settings):
-    xml_tree = settings["xml_tree"]
+    publisher = settings["publisher"]
     conn = settings["conn"]
     
-    command = UserCommand()
-    attributes = {
+    data = {
         "timestamp": int(time.time() * 1000), 
         "server": "DDJK",
-        "transactionNum": int(transaction_num),
+        "transaction_num": int(transaction_num),
         "command": "BUY",
         "username": user_id,
-        "stockSymbol": stock_symbol,
+        "stock_symbol": stock_symbol,
         "funds": float(amount)
     }
-    command.updateAll(**attributes)
-    xml_tree.append(command)
+    message = {
+        "type": "userCommand",
+        "data": data
+    }
+    publisher.publish(json.dumps(message))
     
     price, stock_symbol, user_id, time_of_quote, cryptokey = await quote(transaction_num, user_id, stock_symbol, **settings)
 
     stock_quantity = int(float(amount) / price)
     if stock_quantity <= 0:
-        error = ErrorEvent()
-        attributes = {
+        data = {
             "timestamp": int(time.time() * 1000), 
             "server": "DDJK",
-            "transactionNum": int(transaction_num),
+            "transaction_num": int(transaction_num),
             "command": "BUY",
             "username": user_id,
-            "stockSymbol": stock_symbol,
+            "stock_symbol": stock_symbol,
             "funds": float(amount),
-            "errorMessage": "Amount insufficient to purchase at least 1 stock" 
+            "error_message": "Amount insufficient to purchase at least 1 stock" 
         }
-        error.updateAll(**attributes)
-        xml_tree.append(error)
+        message = {
+            "type": "errorEvent",
+            "data": data
+        }
+        publisher.publish_message(json.dumps(message))
 
         logger.info("Amount insufficient to purchase at least 1 stock for %s.", transaction_num)
         return "Amount insufficient to purchase at least 1 stock"
@@ -304,19 +314,21 @@ async def buy(transaction_num, user_id, stock_symbol, amount, **settings):
         result = await conn.fetchrow(balance_check, user_id, purchase_price)
 
         if not result:
-            error = ErrorEvent()
-            attributes = {
+            data = {
                 "timestamp": int(time.time() * 1000), 
                 "server": "DDJK",
-                "transactionNum": int(transaction_num),
+                "transaction_num": int(transaction_num),
                 "command": "BUY",
                 "username": user_id,
-                "stockSymbol": stock_symbol,
+                "stock_symbol": stock_symbol,
                 "funds": purchase_price,
-                "errorMessage": "Funds insufficient to purchase requested stock."
+                "error_message": "Funds insufficient to purchase requested stock."
             }
-            error.updateAll(**attributes)
-            xml_tree.append(error)
+            message = {
+                "type": "errorEvent",
+                "data": data
+            }
+            publisher.publish_message(json.dumps(message))
 
             logger.info("Funds insufficient to purchase requested stock for %s", transaction_num)
             return "Funds insufficient to purchase requested stock."
@@ -345,48 +357,55 @@ async def buy(transaction_num, user_id, stock_symbol, amount, **settings):
         # Mark for expiry in QUOTE_LIFESPAN seconds.
         await reservation_timestamp_queue.put(timestamp)
 
-    transaction = AccountTransaction()
-    attributes = {
+
+    data = {
         "timestamp": int(time.time() * 1000), 
         "server": "DDJK",
-        "transactionNum": int(transaction_num),
+        "transaction_num": int(transaction_num),
         "action": "remove", 
         "username": user_id,
         "funds": float(amount)
     }
-    transaction.updateAll(**attributes)
-    xml_tree.append(transaction)
+    message = {
+        "type": "accountTransaction",
+        "data": data
+    }
+    publisher.publish(json.dumps(message))
 
 async def commit_buy(transaction_num, user_id, **settings):
-    xml_tree = settings["xml_tree"]
+    publisher = settings["publisher"]
     conn = settings["conn"]
 
-    command = UserCommand()
-    attributes = {
+    data = {
         "timestamp": int(time.time() * 1000), 
         "server": "DDJK",
-        "transactionNum": int(transaction_num),
+        "transaction_num": int(transaction_num),
         "command": "COMMIT_BUY",
         "username": user_id
     }
-    command.updateAll(**attributes)
-    xml_tree.append(command)
+    message = {
+        "type": "userCommand",
+        "data": data
+    }
+    publisher.publish(json.dumps(message))
     
     async with conn.transaction():
 
         selected = await _get_latest_reserved("buy", user_id, conn)
         if not selected:
-            error = ErrorEvent()
-            attributes = {
+            data = {
                 "timestamp": int(time.time() * 1000), 
                 "server": "DDJK",
-                "transactionNum": int(transaction_num),
+                "transaction_num": int(transaction_num),
                 "command": "COMMIT_BUY",
                 "username": user_id,
-                "errorMessage": "No BUY to commit" 
+                "error_message": "No BUY to commit" 
             }
-            error.updateAll(**attributes)
-            xml_tree.append(error)
+            message = {
+                "type": "errorEvent",
+                "data": data
+            }
+            publisher.publish(json.dumps(message))
 
             logger.info("No buy to commit for %s", transaction_num)
             return "No BUY to commit" 
@@ -406,35 +425,39 @@ async def commit_buy(transaction_num, user_id, **settings):
         await conn.execute(reservation_delete, selected["reservationid"])
 
 async def cancel_buy(transaction_num, user_id, **settings):
-    xml_tree = settings["xml_tree"]
+    publisher = settings["publisher"]
     conn = settings["conn"]
 
-    command = UserCommand()
-    attributes = {
+    data = {
         "timestamp": int(time.time() * 1000), 
         "server": "DDJK",
-        "transactionNum": int(transaction_num),
+        "transaction_num": int(transaction_num),
         "command": "CANCEL_BUY",
         "username": user_id
     }
-    command.updateAll(**attributes)
-    xml_tree.append(command)
+    message = {
+        "type": "userCommand",
+        "data": data
+    }
+    publisher.publish(json.dumps(message))
 
     async with conn.transaction():
 
         selected = await _get_latest_reserved("buy", user_id, conn)
         if not selected:
-            error = ErrorEvent()
-            attributes = {
+            data = {
                 "timestamp": int(time.time() * 1000), 
                 "server": "DDJK",
-                "transactionNum": int(transaction_num),
+                "transaction_num": int(transaction_num),
                 "command": "CANCEL_BUY",
                 "username": user_id,
-                "errorMessage": "No BUY to cancel" 
+                "error_message": "No BUY to cancel" 
             }
-            error.updateAll(**attributes)
-            xml_tree.append(error)
+            message = {
+                "type": "errorEvent",
+                "data": data
+            }
+            publisher.publish(json.dumps(message))
 
             logger.info("No buy to cancel for %s", transaction_num)
             return "No BUY to cancel" 
@@ -450,52 +473,60 @@ async def cancel_buy(transaction_num, user_id, **settings):
 
         await conn.execute(delete_reserved, selected["reservationid"])
 
-    transaction = AccountTransaction()
-    attributes = {
+
+    data = {
         "timestamp": int(time.time() * 1000), 
         "server": "DDJK",
-        "transactionNum": int(transaction_num),
+        "transaction_num": int(transaction_num),
         "action": "add", 
         "username": user_id,
         "funds": float(selected["amount"])
     }
-    transaction.updateAll(**attributes)
-    xml_tree.append(transaction)
+    message = {
+        "type": "accountTransaction",
+        "data": data
+    }
+    publisher.publish(json.dumps(message))
 
 async def sell(transaction_num, user_id, stock_symbol, amount, **settings):
-    xml_tree = settings["xml_tree"]
+    publisher = settings["publisher"]
     conn = settings["conn"]
 
     command = UserCommand()
-    attributes = {
+    data = {
         "timestamp": int(time.time() * 1000), 
         "server": "DDJK",
-        "transactionNum": int(transaction_num),
+        "transaction_num": int(transaction_num),
         "command": "SELL",
         "username": user_id,
-        "stockSymbol": stock_symbol,
+        "stock_symbol": stock_symbol,
         "funds": float(amount)
     }
-    command.updateAll(**attributes)
-    xml_tree.append(command)
+    message = {
+        "type": "userCommand",
+        "data": data
+    }
+    publisher.publish(json.dumps(message))
 
     price, stock_symbol, user_id, time_of_quote, cryptokey = await quote(transaction_num, user_id, stock_symbol, **settings)
 
     sell_quantity = int(float(amount) / price)
     if sell_quantity <= 0:
-        error = ErrorEvent()
-        attributes = {
+        data = {
             "timestamp": int(time.time() * 1000),
             "server": "DDJK",
-            "transactionNum": int(transaction_num),
+            "transaction_num": int(transaction_num),
             "command": "SELL",
             "username": user_id,
-            "stockSymbol": stock_symbol,
+            "stock_symbol": stock_symbol,
             "funds": float(amount),
-            "errorMessage": "Amount insufficient to sell at least 1 stock"
+            "error_message": "Amount insufficient to sell at least 1 stock"
         }
-        error.updateAll(**attributes)
-        xml_tree.append(error)
+        message = {
+            "type": "errorEvent",
+            "data": data
+        }
+        publisher.publish(json.dumps(message))
 
         logger.info("Amount insufficient to sell at least 1 stock for %s.", transaction_num)
         return "Amount insufficient to sell at least 1 stock"
@@ -512,18 +543,20 @@ async def sell(transaction_num, user_id, stock_symbol, amount, **settings):
         result = await conn.fetchrow(stock_check, user_id, stock_symbol, sell_quantity)
 
         if not result:
-            error = ErrorEvent()
-            attributes = {
+            data = {
                 "timestamp": int(time.time() * 1000), 
                 "server": "DDJK",
-                "transactionNum": int(transaction_num),
+                "transaction_num": int(transaction_num),
                 "command": "BUY",
                 "username": user_id,
-                "stockSymbol": stock_symbol,
-                "errorMessage": "Stock quantity insufficient to sell requested stock."
+                "stock_symbol": stock_symbol,
+                "error_message": "Stock quantity insufficient to sell requested stock."
             }
-            error.updateAll(**attributes)
-            xml_tree.append(error)
+            message = {
+                "type": "errorEvent",
+                "data": data
+            }
+            publisher.publish(json.dumps(message))
 
             logger.info("Funds insufficient to purchase requested stock for %s", transaction_num)
             return "Stock quantity insufficient to sell requested stock."
@@ -550,35 +583,39 @@ async def sell(transaction_num, user_id, stock_symbol, amount, **settings):
         await reservation_timestamp_queue.put(timestamp)
 
 async def commit_sell(transaction_num, user_id, **settings):
-    xml_tree = settings["xml_tree"]
+    publisher = settings["publisher"]
     conn = settings["conn"]
 
-    command = UserCommand()
-    attributes = {
+    data = {
         "timestamp": int(time.time() * 1000), 
         "server": "DDJK",
-        "transactionNum": int(transaction_num),
+        "transaction_num": int(transaction_num),
         "command": "COMMIT_SELL",
         "username": user_id
     }
-    command.updateAll(**attributes)
-    xml_tree.append(command)
+    message = {
+        "type": "userCommand",
+        "data": data
+    }
+    publisher.publish(json.dumps(message))
 
     async with conn.transaction():
 
         selected = await _get_latest_reserved("sell", user_id, conn)
         if not selected:
-            error = ErrorEvent()
-            attributes = {
+            data = {
                 "timestamp": int(time.time() * 1000), 
                 "server": "DDJK",
-                "transactionNum": int(transaction_num),
+                "transaction_num": int(transaction_num),
                 "command": "COMMIT_SELL",
                 "username": user_id,
-                "errorMessage": "No SELL to commit" 
+                "error_message": "No SELL to commit" 
             }
-            error.updateAll(**attributes)
-            xml_tree.append(error)
+            message = {
+                "type": "errorEvent",
+                "data": data
+            }
+            publisher.publish(json.dumps(message))
 
             logger.info("No sell to commit for %s", transaction_num)
             return "No SELL to commit" 
@@ -594,48 +631,54 @@ async def commit_sell(transaction_num, user_id, **settings):
 
         await conn.execute(delete_reserved, selected["reservationid"])
 
-    transaction = AccountTransaction()
-    attributes = {
+    data = {
         "timestamp": int(time.time() * 1000), 
         "server": "DDJK",
-        "transactionNum": int(transaction_num),
+        "transaction_num": int(transaction_num),
         "action": "add", 
         "username": user_id,
         "funds": float(selected["amount"])
     }
-    transaction.updateAll(**attributes)
-    xml_tree.append(transaction)
+    message = {
+        "type": "accountTransaction",
+        "data": data
+    }
+    publisher.publish(json.dumps(message))
 
 async def cancel_sell(transaction_num, user_id, **settings):
-    xml_tree = settings["xml_tree"]
+    publisher = settings["publisher"]
     conn = settings["conn"]
 
-    command = UserCommand()
-    attributes = {
+    data = {
         "timestamp": int(time.time() * 1000), 
         "server": "DDJK",
-        "transactionNum": int(transaction_num),
+        "transaction_num": int(transaction_num),
         "command": "CANCEL_SELL",
         "username": user_id
     }
-    command.updateAll(**attributes)
-    xml_tree.append(command)
+    message = {
+        "type": "userCommand",
+        "data": data
+    }
+    publisher.publish(json.dumps(message))
 
     async with conn.transaction():
 
         selected = await _get_latest_reserved("sell", user_id, conn)
         if not selected:
-            error = ErrorEvent()
-            attributes = {
+            data = {
                 "timestamp": int(time.time() * 1000), 
                 "server": "DDJK",
-                "transactionNum": int(transaction_num),
+                "transaction_num": int(transaction_num),
                 "command": "CANCEL_SELL",
                 "username": user_id,
-                "errorMessage": "No SELL to cancel" 
+                "error_message": "No SELL to cancel" 
             }
-            error.updateAll(**attributes)
-            xml_tree.append(error)
+            message = {
+                "type": "errorEvent",
+                "data": data
+            }
+            publisher.publish(json.dumps(message))
 
             logger.info("No sell to cancel for %s", transaction_num)
             return "No SELL to cancel" 
@@ -655,21 +698,23 @@ async def cancel_sell(transaction_num, user_id, **settings):
 # set_buy_amount allows a user to set a dollar amount of stock to buy.  This must be followed
 # by set_buy_trigger() before the trigger goes 'live'. 
 async def set_buy_amount(transaction_num, user_id, stock_symbol, amount, **settings):
-    xml_tree = settings["xml_tree"]
+    publisher = settings["publisher"]
     conn = settings["conn"]
 
-    command = UserCommand()
-    attributes = {
+    data = {
         "timestamp": int(time.time() * 1000), 
         "server": "DDJK",
-        "transactionNum": int(transaction_num),
+        "transaction_num": int(transaction_num),
         "command": "SET_BUY_AMOUNT",
         "username": user_id,
-        "stockSymbol": stock_symbol,
+        "stock_symbol": stock_symbol,
         "funds": float(amount)
     }
-    command.updateAll(**attributes)
-    xml_tree.append(command)
+    message = {
+        "type": "userCommand",
+        "data": data
+    }
+    publisher.publish(json.dumps(message))
 
     async with conn.transaction():
 
@@ -695,18 +740,20 @@ async def set_buy_amount(transaction_num, user_id, stock_symbol, amount, **setti
         balance = await conn.fetchval(balance_check, user_id)
 
         if not balance or balance < difference:
-            error = ErrorEvent()
-            attributes = {
+            data = {
                 "timestamp": int(time.time() * 1000), 
                 "server": "DDJK",
-                "transactionNum": int(transaction_num),
+                "transaction_num": int(transaction_num),
                 "command": "SET_BUY_AMOUNT",
                 "username": user_id,
-                "errorMessage": "Insufficient Funds" 
+                "error_message": "Insufficient Funds" 
             }
-            error.updateAll(**attributes)
-            xml_tree.append(error)
-            return "Insufficient Funds" 
+            message = {
+                "type": "errorEvent",
+                "data": data
+            }
+            publisher.publish(json.dumps(message))
+            return
 
         logger.debug("Balance of %s: %.02f is sufficient for %s", user_id, balance, transaction_num)
 
@@ -728,39 +775,44 @@ async def set_buy_amount(transaction_num, user_id, stock_symbol, amount, **setti
 
         await conn.execute(triggers_update, user_id, stock_symbol, float(amount), int(transaction_num))
 
-    transaction = AccountTransaction()
-    attributes = {
+
+    data = {
         "timestamp": int(time.time() * 1000), 
         "server": "DDJK",
-        "transactionNum": int(transaction_num),
+        "transaction_num": int(transaction_num),
         "username": user_id,
         "funds": abs(float(difference))
     }
     if difference > 0:
         # money is to be removed from user account 
-        attributes.update({"action": "remove"})
+        data.update({"action": "remove"})
     else:
         # difference < 0, therefore money is being refunded back into user account
-        attributes.update({"action": "add"})
+        data.update({"action": "add"})
 
-    transaction.updateAll(**attributes)
-    xml_tree.append(transaction)        
+    message = {
+        "type": "accountTransaction",
+        "data": data
+    }
+    publisher.publish(json.dumps(message))   
 
 async def cancel_set_buy(transaction_num, user_id, stock_symbol, **settings):
-    xml_tree = settings["xml_tree"]
+    publisher = settings["publisher"]
     conn = settings["conn"]
     
-    command = UserCommand()
-    attributes = {
+    data = {
         "timestamp": int(time.time() * 1000), 
         "server": "DDJK",
-        "transactionNum": int(transaction_num),
+        "transaction_num": int(transaction_num),
         "command": "CANCEL_SET_BUY",
         "username": user_id,
-        "stockSymbol": stock_symbol
+        "stock_symbol": stock_symbol
     }
-    command.updateAll(**attributes)
-    xml_tree.append(command)
+    message = {
+        "type": "userCommand",
+        "data": data
+    }
+    publisher.publish(json.dumps(message))
     
     async with conn.transaction():
 
@@ -774,17 +826,19 @@ async def cancel_set_buy(transaction_num, user_id, stock_symbol, **settings):
         refund_amount = await conn.fetchval(get_existing, user_id, stock_symbol)
 
         if not refund_amount:
-            error = ErrorEvent()
-            attributes = {
+            data = {
                 "timestamp": int(time.time() * 1000), 
                 "server": "DDJK",
-                "transactionNum": int(transaction_num),
+                "transaction_num": int(transaction_num),
                 "command": "CANCEL_SET_BUY",
                 "username": user_id,
-                "errorMessage": "SET_BUY does not exist, no action taken"
+                "error_message": "SET_BUY does not exist, no action taken"
             }
-            error.updateAll(**attributes)
-            xml_tree.append(error)
+            message = {
+                "type": "errorEvent",
+                "data": data
+            }
+            publisher.publish(json.dumps(message))
 
             logger.info("SET_BUY does not exist, no action taken")
             return "SET_BUY does not exist, no action taken"
@@ -805,35 +859,45 @@ async def cancel_set_buy(transaction_num, user_id, stock_symbol, **settings):
 
         await conn.execute(triggers_delete, user_id, stock_symbol)
 
-    transaction = AccountTransaction()
-    attributes = {
+        users_update =  "UPDATE users               " \
+                        "SET balance = balance + $1 " \
+                        "WHERE username = $2        "
+
+        await conn.execute(users_update, refund_amount, user_id)
+
+    data = {
         "timestamp": int(time.time() * 1000), 
         "server": "DDJK",
-        "transactionNum": int(transaction_num),
+        "transaction_num": int(transaction_num),
         "action": "add", 
         "username": user_id,
         "funds": refund_amount
     }
-    transaction.updateAll(**attributes)
-    xml_tree.append(transaction)
+    message = {
+        "type": "accountTransaction",
+        "data": data
+    }
+    publisher.publish(json.dumps(message))
 
 async def set_buy_trigger(transaction_num, user_id, stock_symbol, amount, **settings):
-    xml_tree = settings["xml_tree"]
+    publisher = settings["publisher"]
     conn = settings["conn"]
     
-    command = UserCommand()
-    attributes = {
+    data = {
         "timestamp": int(time.time() * 1000), 
         "server": "DDJK",
-        "transactionNum": int(transaction_num),
+        "transaction_num": int(transaction_num),
         "command": "SET_BUY_TRIGGER",
         "username": user_id,
-        "stockSymbol": stock_symbol,
+        "stock_symbol": stock_symbol,
         "funds": float(amount)
     }
-    command.updateAll(**attributes)
-    xml_tree.append(command)
-    
+    message = {
+        "type": "userCommand",
+        "data": data
+    }
+    publisher.publish(json.dumps(message))
+
     async with conn.transaction():
 
         get_existing = "SELECT transaction_amount  " \
@@ -846,17 +910,19 @@ async def set_buy_trigger(transaction_num, user_id, stock_symbol, amount, **sett
         existing = await conn.fetchval(get_existing, user_id, stock_symbol)
 
         if not existing:
-            error = ErrorEvent()
-            attributes = {
+            data = {
                 "timestamp": int(time.time() * 1000), 
                 "server": "DDJK",
-                "transactionNum": int(transaction_num),
+                "transaction_num": int(transaction_num),
                 "command": "SET_BUY_TRIGGER",
                 "username": user_id,
-                "errorMessage": "SET_BUY does not exist, no action taken"
+                "error_message": "SET_BUY does not exist, no action taken"
             }
-            error.updateAll(**attributes)
-            xml_tree.append(error)
+            message = {
+                "type": "errorEvent",
+                "data": data
+            }
+            publisher.publish(json.dumps(message))
 
             logger.info("SET_BUY does not exist, no action taken")
             return "SET_BUY does not exist, no action taken"
@@ -872,21 +938,23 @@ async def set_buy_trigger(transaction_num, user_id, stock_symbol, amount, **sett
         await conn.execute(triggers_update, float(amount), int(transaction_num), user_id, stock_symbol)
 
 async def set_sell_amount(transaction_num, user_id, stock_symbol, requested_transaction, **settings):
-    xml_tree = settings["xml_tree"]
+    publisher = settings["publisher"]
     conn = settings["conn"]
     
-    command = UserCommand()
-    attributes = {
+    data = {
         "timestamp": int(time.time() * 1000), 
         "server": "DDJK",
-        "transactionNum": int(transaction_num),
+        "transaction_num": int(transaction_num),
         "command": "SET_SELL_AMOUNT",
         "username": user_id,
-        "stockSymbol": stock_symbol,
+        "stock_symbol": stock_symbol,
         "funds": float(requested_transaction)
     }
-    command.updateAll(**attributes)
-    xml_tree.append(command)
+    message = {
+        "type": "userCommand",
+        "data": data
+    }
+    publisher.publish(json.dumps(message))
 
     async with conn.transaction():
 
@@ -896,18 +964,20 @@ async def set_sell_amount(transaction_num, user_id, stock_symbol, requested_tran
 
         exists = await conn.fetchval(user_check, user_id)
         if not exists:
-            error = ErrorEvent()
-            attributes = {
+            data = {
                 "timestamp": int(time.time() * 1000), 
                 "server": "DDJK",
-                "transactionNum": int(transaction_num),
+                "transaction_num": int(transaction_num),
                 "command": "SET_BUY_TRIGGER",
                 "username": user_id,
-                "errorMessage": "User for SET_SELL_AMOUNT does not exist"
+                "error_message": "User for SET_SELL_AMOUNT does not exist"
             }
-            error.updateAll(**attributes)
-            xml_tree.append(error)
-            return "User for SET_SELL_AMOUNT does not exist"
+            message = {
+                "type": "errorEvent",
+                "data": data
+            }
+            publisher.publish(json.dumps(message))
+            return
 
         # If a trigger already exists, we need to recalculate the required stock.
         get_existing =  "SELECT transaction_amount, trigger_amount  " \
@@ -950,18 +1020,20 @@ async def set_sell_amount(transaction_num, user_id, stock_symbol, requested_tran
 
                 # Difference may be negative, however this check will still pass.
                 if not stock_owned or stock_owned < difference:
-                    error = ErrorEvent()
-                    attributes = {
+                    data = {
                         "timestamp": int(time.time() * 1000),
                         "server": "DDJK",
-                        "transactionNum": int(transaction_num),
+                        "transaction_num": int(transaction_num),
                         "command": "SET_SELL_AMOUNT",
                         "username": user_id,
-                        "errorMessage": "User does not own enough shares of this type"
+                        "error_message": "User does not own enough shares of this type"
                     }
-                    error.updateAll(**attributes)
-                    xml_tree.append(error)
-                    return "User does not own enough shares of this type"
+                    message = {
+                        "type": "errorEvent",
+                        "data": data
+                    }
+                    publisher.publish(json.dumps(message))
+                    return
 
                 logger.info("User owns enough stocks for transaction %s to proceed.", transaction_num)
 
@@ -994,20 +1066,22 @@ async def set_sell_amount(transaction_num, user_id, stock_symbol, requested_tran
                     float(requested_transaction), int(transaction_num))
 
 async def cancel_set_sell(transaction_num, user_id, stock_symbol, **settings):
-    xml_tree = settings["xml_tree"]
+    publisher = settings["publisher"]
     conn = settings["conn"]
     
-    command = UserCommand()
-    attributes = {
+    data = {
         "timestamp": int(time.time() * 1000), 
         "server": "DDJK",
-        "transactionNum": int(transaction_num),
+        "transaction_num": int(transaction_num),
         "command": "CANCEL_SET_SELL",
         "username": user_id,
-        "stockSymbol": stock_symbol
+        "stock_symbol": stock_symbol
     }
-    command.updateAll(**attributes)
-    xml_tree.append(command)
+    message = {
+        "type": "userCommand",
+        "data": data
+    }
+    publisher.publish(json.dumps(message))
 
     async with conn.transaction():
 
@@ -1021,17 +1095,19 @@ async def cancel_set_sell(transaction_num, user_id, stock_symbol, **settings):
         existing = await conn.fetchrow(get_existing, user_id, stock_symbol)
 
         if not existing:
-            error = ErrorEvent()
-            attributes = {
+            data = {
                 "timestamp": int(time.time() * 1000),
                 "server": "DDJK",
-                "transactionNum": int(transaction_num),
+                "transaction_num": int(transaction_num),
                 "command": "CANCEL_SET_SELL",
                 "username": user_id,
-                "errorMessage": "SET_SELL does not exist, no action taken"
+                "error_message": "SET_SELL does not exist, no action taken"
             }
-            error.updateAll(**attributes)
-            xml_tree.append(error)
+            message = {
+                "type": "errorEvent",
+                "data": data
+            }
+            publisher.publish(json.dumps(message))
 
             logger.info("SET_SELL does not exist, no action taken")
             return "SET_SELL does not exist, no action taken"
@@ -1062,21 +1138,23 @@ async def cancel_set_sell(transaction_num, user_id, stock_symbol, **settings):
         await conn.execute(triggers_delete, user_id, stock_symbol)
 
 async def set_sell_trigger(transaction_num, user_id, stock_symbol, requested_trigger, **settings):
-    xml_tree = settings["xml_tree"]
+    publisher = settings["publisher"]
     conn = settings["conn"]
     
-    command = UserCommand()
-    attributes = {
+    data = {
         "timestamp": int(time.time() * 1000), 
         "server": "DDJK",
-        "transactionNum": int(transaction_num),
+        "transaction_num": int(transaction_num),
         "command": "SET_SELL_TRIGGER",
         "username": user_id,
-        "stockSymbol": stock_symbol,
+        "stock_symbol": stock_symbol,
         "funds": float(requested_trigger)
     }
-    command.updateAll(**attributes)
-    xml_tree.append(command)
+    message = {
+        "type": "userCommand",
+        "data": data
+    }
+    publisher.publish(json.dumps(message))
 
     async with conn.transaction():
     
@@ -1090,17 +1168,19 @@ async def set_sell_trigger(transaction_num, user_id, stock_symbol, requested_tri
         existing = await conn.fetchrow(get_existing, user_id, stock_symbol)
 
         if not existing:
-            error = ErrorEvent()
-            attributes = {
+            data = {
                 "timestamp": int(time.time() * 1000), 
                 "server": "DDJK",
-                "transactionNum": int(transaction_num),
+                "transaction_num": int(transaction_num),
                 "command": "SET_SELL_TRIGGER",
                 "username": user_id,
-                "errorMessage": "SET_SELL does not exist, no action taken"
+                "error_message": "SET_SELL does not exist, no action taken"
             }
-            error.updateAll(**attributes)
-            xml_tree.append(error)
+            message = {
+                "type": "errorEvent",
+                "data": data
+            }
+            publisher.publish(json.dumps(message))
 
             logger.info("SET_SELL does not exist, no action taken")
             return "SET_SELL does not exist, no action taken"
@@ -1133,18 +1213,20 @@ async def set_sell_trigger(transaction_num, user_id, stock_symbol, requested_tri
 
         # Difference may be negative, however this check will still pass.
         if not stock_owned or stock_owned < difference:
-            error = ErrorEvent()
-            attributes = {
+            data = {
                 "timestamp": int(time.time() * 1000), 
                 "server": "DDJK",
-                "transactionNum": int(transaction_num),
+                "transaction_num": int(transaction_num),
                 "command": "SET_SELL_TRIGGER",
                 "username": user_id,
-                "errorMessage": "User does not own enough shares of this type"
+                "error_message": "User does not own enough shares of this type"
             }
-            error.updateAll(**attributes)
-            xml_tree.append(error)
-            return "User does not own enough shares of this type"
+            message = {
+                "type": "errorEvent",
+                "data": data
+            }
+            publisher.publish(json.dumps(message))
+            return
 
         logger.info("User owns enough stocks for transaction %s to proceed.", transaction_num)
 
@@ -1166,7 +1248,7 @@ async def set_sell_trigger(transaction_num, user_id, stock_symbol, requested_tri
 
         await conn.execute(triggers_update, float(requested_trigger), int(transaction_num), user_id, stock_symbol)
 
-async def _process_trigger(record, pool, xml_tree):
+async def _process_trigger(record, pool, publisher):
 
     async with pool.acquire() as conn:
         async with conn.transaction():
@@ -1182,7 +1264,7 @@ async def _process_trigger(record, pool, xml_tree):
                 # silently exit.
                 return
 
-            settings = {"xml_tree": xml_tree}
+            settings = {"publisher": publisher}
             results = await quote(record["transaction_number"], record["username"], record["stock_symbol"], **settings)
             price = results[0]
 
@@ -1228,19 +1310,21 @@ async def _process_trigger(record, pool, xml_tree):
 
             await conn.execute(triggers_update, record["username"], record["stock_symbol"], record["type"])
 
-    transaction = AccountTransaction()
-    attributes = {
+    data = {
         "timestamp": int(time.time() * 1000), 
         "server": "DDJK",
-        "transactionNum": record["transaction_number"],
+        "transaction_num": record["transaction_number"],
         "action": "add", 
         "username": record["username"],
         "funds": float(balance_addition)
     }
-    transaction.updateAll(**attributes)
-    xml_tree.append(transaction)
+    message = {
+        "type": "accountTransaction",
+        "data": data
+    }
+    publisher.publish(json.dumps(message))
 
-async def trigger_maintainer(pool, xml_tree):
+async def trigger_maintainer(pool, publisher):
 
     while True:
         start_time = round(loop.time())
@@ -1259,7 +1343,7 @@ async def trigger_maintainer(pool, xml_tree):
 
         logging.info("Trigger maintainer: %s triggers found to check.", len(triggers))
 
-        tasks = [_process_trigger(record, pool, xml_tree) for record in triggers]
+        tasks = [_process_trigger(record, pool, publisher) for record in triggers]
         await asyncio.gather(*tasks)
 
         logging.debug("Finished processing triggers")
@@ -1271,43 +1355,46 @@ async def trigger_maintainer(pool, xml_tree):
         logging.debug("Trigger maintainer woke up")
 
 # Deprecated.
-async def dumplog(transaction_num, filename, **settings):
-    xml_tree = settings["xml_tree"]
+def dumplog(transaction_num, filename, publisher):
     command = UserCommand()
-    attributes = {
+    data = {
         "timestamp": int(time.time() * 1000), 
         "server": "DDJK",
-        "transactionNum": int(transaction_num),
+        "transaction_num": transaction_num,
         "command": "DUMPLOG"
     }
-    command.updateAll(**attributes)
-    xml_tree.append(command)
+    message = {
+        "type": "userCommand",
+        "data": data
+    }
+    publisher.publish(json.dumps(message))
 
 # Deprecated.
-async def dumplog_user(transaction_num, user_id, filename, **settings):
-    xml_tree = settings["xml_tree"]
-    command = UserCommand()
-    attributes = {
+def dumplog_user(transaction_num, user_id, filename, publisher):
+    data = {
         "timestamp": int(time.time() * 1000), 
         "server": "DDJK",
-        "transactionNum": int(transaction_num),
+        "transaction_num": transaction_num,
         "command": "DUMPLOG",
         "username": user_id
     }
-    command.updateAll(**attributes)
-    xml_tree.append(command)
+    message = {
+        "type": "userCommand",
+        "data": data
+    }
+    publisher.publish(json.dumps(message))
 
 # Deprecated.
-async def display_summary(transaction_num, user_id, **settings):
-    xml_tree = settings["xml_tree"]
-    command = UserCommand()
-    attributes = {
+def display_summary(transaction_num, user_id, publisher):
+    data = {
         "timestamp": int(time.time() * 1000), 
         "server": "DDJK",
-        "transactionNum": int(transaction_num),
+        "transaction_num": transaction_num,
         "command": "DISPLAY_SUMMARY",
         "username": user_id
     }
-    command.updateAll(**attributes)
-    xml_tree.append(command)
-
+    message = {
+        "type": "userCommand",
+        "data": data
+    }
+    publisher.publish(json.dumps(message))
