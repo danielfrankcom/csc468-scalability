@@ -8,6 +8,14 @@ services:
             - POSTGRES_PASSWORD=${DB_PASS}
         volumes:
             - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    logging-db:
+        build: logging-db
+        restart: on-failure
+        environment:
+            - POSTGRES_USER=${DB_USER}
+            - POSTGRES_PASSWORD=${DB_PASS}
+        volumes:
+            - ./logging-db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     adminer:
         image: michalhosna/adminer:4.7.0
         depends_on:
