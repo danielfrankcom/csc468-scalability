@@ -54,39 +54,44 @@ async def reservation_timeout_handler(loop, pool):
 
         # Loops until all currently expired transactions have been dealt with.
         while True:
-            async with pool.acquire() as conn:
-                async with conn.transaction():
+            try:
+                async with pool.acquire() as conn:
+                    async with conn.transaction():
 
-                    delete_reserved =   "DELETE FROM reserved       " \
-                                        "WHERE timestamp < $1       " \
-                                        "RETURNING *;               " 
+                        delete_reserved =   "DELETE FROM reserved       " \
+                                            "WHERE timestamp < $1       " \
+                                            "RETURNING *;               " 
 
-                    target_timestamp = round(time.time(), 5)
-                    reservation = await conn.fetchrow(delete_reserved, target_timestamp)
+                        target_timestamp = round(time.time(), 5)
+                        reservation = await conn.fetchrow(delete_reserved, target_timestamp)
 
-                    # There are no more expired reservations
-                    if not reservation:
-                        logging.debug("No reservations found, breaking")
-                        break
+                        # There are no more expired reservations
+                        if not reservation:
+                            logging.debug("No reservations found, breaking")
+                            break
 
-                    logging.debug("Found reservation %s of type %s",
-                            reservation["reservationid"], reservation["type"])
+                        logging.debug("Found reservation %s of type %s",
+                                reservation["reservationid"], reservation["type"])
 
-                    if reservation["type"] == "buy":
+                        if reservation["type"] == "buy":
 
-                        users_update =  "UPDATE users " \
-                                        "SET balance = balance + $1 " \
-                                        "WHERE username = $2;"
-                        await conn.execute(users_update, reservation["amount"], reservation["username"])
+                            users_update =  "UPDATE users " \
+                                            "SET balance = balance + $1 " \
+                                            "WHERE username = $2;"
+                            await conn.execute(users_update, reservation["amount"], reservation["username"])
 
-                    else:
+                        else:
 
-                        stocks_update = "UPDATE stocks " \
-                                        "SET stock_quantity = stock_quantity + $1 " \
-                                        "WHERE username = $2 " \
-                                        "AND stock_symbol = $3;"
-                        await conn.execute(stocks_update, reservation["stock_quantity"],
-                                reservation["username"], reservation["stock_symbol"])
+                            stocks_update = "UPDATE stocks " \
+                                            "SET stock_quantity = stock_quantity + $1 " \
+                                            "WHERE username = $2 " \
+                                            "AND stock_symbol = $3;"
+                            await conn.execute(stocks_update, reservation["stock_quantity"],
+                                    reservation["username"], reservation["stock_symbol"])
+            except:
+                # An exception should not
+                # stop the entire task.
+                pass
 
         expired = True
         while expired:
