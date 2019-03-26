@@ -7,9 +7,9 @@ DROP TABLE IF EXISTS debugevents;
 
 
 CREATE TABLE usercommands (
-    timestamp INT(14) NOT NULL PRIMARY KEY,
+    timeof TIMESTAMP NOT NULL PRIMARY KEY,
 	server VARCHAR(20) NOT NULL,
-	transaction_num INT(10) NOT NULL,
+	transaction_num INTEGER NOT NULL,
 	command VARCHAR(20) NOT NULL,
 	username VARCHAR(20),
 	stock_symbol VARCHAR(3),
@@ -17,29 +17,29 @@ CREATE TABLE usercommands (
 );
 
 CREATE TABLE quoteservers (
-    timestamp INT(14) NOT NULL PRIMARY KEY,
+    timeof TIMESTAMP NOT NULL PRIMARY KEY,
 	server VARCHAR(20) NOT NULL,
-	transaction_num INT(10) NOT NULL,
+	transaction_num INTEGER NOT NULL,
 	price FLOAT NOT NULL,
 	stock_symbol VARCHAR(3) NOT NULL,
 	username VARCHAR(20) NOT NULL,
-	quote_server_time INT(14) NOT NULL,
+	quote_server_time TIMESTAMP NOT NULL,
 	crypto_key VARCHAR(80) NOT NULL
 );
 
 CREATE TABLE accounttransactions (
-    timestamp INT(14) NOT NULL PRIMARY KEY,
+    timeof TIMESTAMP NOT NULL PRIMARY KEY,
 	server VARCHAR(20) NOT NULL,
-	transaction_num INT(10) NOT NULL,
+	transaction_num INTEGER NOT NULL,
 	action VARCHAR(6) NOT NULL,
 	username VARCHAR(20) NOT NULL,
 	funds FLOAT
 );
 
 CREATE TABLE systemevents (
-    timestamp INT(14) NOT NULL PRIMARY KEY,
+    timeof TIMESTAMP NOT NULL PRIMARY KEY,
 	server VARCHAR(20) NOT NULL,
-	transaction_num INT(10) NOT NULL,
+	transaction_num INTEGER NOT NULL,
 	command VARCHAR(20) NOT NULL,
 	username VARCHAR(20),
 	stock_symbol VARCHAR(3),
@@ -47,9 +47,9 @@ CREATE TABLE systemevents (
 );
 
 CREATE TABLE errorevents (
-    timestamp INT(14) NOT NULL PRIMARY KEY,
+    timeof TIMESTAMP NOT NULL PRIMARY KEY,
 	server VARCHAR(20) NOT NULL,
-	transaction_num INT(10) NOT NULL,
+	transaction_num INTEGER NOT NULL,
 	command VARCHAR(20) NOT NULL,
 	username VARCHAR(20),
 	stock_symbol VARCHAR(3),
@@ -58,9 +58,9 @@ CREATE TABLE errorevents (
 );
 
 CREATE TABLE debugevents (
-    timestamp INT(14) NOT NULL PRIMARY KEY,
+    timeof TIMESTAMP NOT NULL PRIMARY KEY,
 	server VARCHAR(20) NOT NULL,
-	transaction_num INT(10) NOT NULL,
+	transaction_num INTEGER NOT NULL,
 	command VARCHAR(20) NOT NULL,
 	username VARCHAR(20),
 	stock_symbol VARCHAR(3),
