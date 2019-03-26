@@ -8,14 +8,34 @@ services:
             - POSTGRES_PASSWORD=${DB_PASS}
         volumes:
             - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    rabbitmq:
+        image: rabbitmq:3-management
+        hostname: "rabbitmq"
+        restart: on-failure
+        ports: 
+            - 5672:5672
+            - 15672:15672
+        environment: 
+            - RABBITMQ_DEFAULT_USER=${RABBIT_MQ_USER}
+            - RABBITMQ_DEFAULT_PASS=${RABBIT_MQ_PASS}
     logging-db:
         build: logging-db
         restart: on-failure
         environment:
             - POSTGRES_USER=${DB_USER}
             - POSTGRES_PASSWORD=${DB_PASS}
+        depends_on:
+            - rabbitmq
         volumes:
             - ./logging-db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    logging-server:
+        build: logging-server
+        restart: on-failure
+        links:
+            - rabbitmq
+        depends_on:
+            - logging-db
+            - rabbitmq
     adminer:
         image: michalhosna/adminer:4.7.0
         depends_on:
