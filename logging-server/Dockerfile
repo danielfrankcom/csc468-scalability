@@ -4,14 +4,15 @@ FROM python:3.7-alpine
 ENV http_proxy=$HTTP_PROXY
 ENV https_proxy=$HTTPS_PROXY
 
-RUN pip3 --trusted-host pypi.org --trusted-host files.pythonhosted.org install --upgrade pip
-RUN pip3 --trusted-host pypi.org --trusted-host files.pythonhosted.org install pika
+RUN pip3 --trusted-host pypi.org --trusted-host files.pythonhosted.org install --upgrade pip 
+RUN pip3 --trusted-host pypi.org --trusted-host files.pythonhosted.org install pika==1.0.0b2
+RUN pip3 --trusted-host pypi.org --trusted-host files.pythonhosted.org install psycopg2
 
 EXPOSE 5672
 
 WORKDIR /src
 
-CMD ["python", "/src/server.py"]
+CMD ["python", "/src/consumer.py"]
 
 COPY ./src /src
 
