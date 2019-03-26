@@ -1,5 +1,5 @@
 import lib.commands as commands
-from lib.xml_writer import *
+from lib.publisher import Publisher
 
 from quart import Quart, request, jsonify
 import asyncpg
@@ -12,6 +12,7 @@ import socket
 import time
 import os
 import re
+import json
 
 
 DB = DB_USER = DB_HOST = "postgres"
@@ -51,9 +52,9 @@ class Processor:
 
         self.users = dict()
 
-        # todo: The XML logger should really be moved to a
-        # database to facilitate DUMPLOGs properly.
-        self.xml_tree = LogBuilder("/out/testLOG")
+
+        self.publisher = Publisher('amqp://admin:admin@rabbitmq:5672/%2F?connection_attempts=10&heartbeat=3600')
+        self.publisher.run()
 
         # It is possible that the postgres container has started
         # but is not ready for connections. We poll until it is
@@ -86,7 +87,7 @@ class Processor:
 
         loop = asyncio.get_event_loop()
         loop.create_task(commands.reservation_timeout_handler(loop, self.pool))
-        loop.create_task(commands.trigger_maintainer(self.pool, self.xml_tree))
+        loop.create_task(commands.trigger_maintainer(self.pool, self.publisher))
 
     def _check_transaction(self, transaction):
         for function, pattern in PROCESSORS:
@@ -158,17 +159,19 @@ class Processor:
                     transaction, transaction_num, command, user_id)
 
             error = ErrorEvent()
-            attributes = {
+            data = {
                 "timestamp": int(time.time() * 1000),
                 "server": "DDJK",
-                "transactionNum": transaction_num,
+                "transaction_num": transaction_num,
                 "username": user_id,
                 "command": command,
-                "errorMessage": "Error while processing command"
+                "error_message": "Error while processing command"
             }
-            error.updateAll(**attributes)
-            self.xml_tree.append(error)
-
+            error = {
+                "type":"errorEvent",
+                "data": data
+            }
+            self.publisher.publish_message(json.dumps(error))
         except:
             logger.exception("Error logging failed for %s.", transaction)
 
@@ -188,7 +191,7 @@ class Processor:
             async with self.pool.acquire() as conn:
                 arguments = {
                         "conn": conn,
-                        "xml_tree": self.xml_tree
+                        "publisher": self.publisher
                 }
 
                 try:
