@@ -10,6 +10,7 @@ RUN apk --update add libc-dev
 RUN apk --update add make
 
 RUN pip3 --trusted-host pypi.org --trusted-host files.pythonhosted.org install --upgrade pip
+RUN pip3 --trusted-host pypi.org --trusted-host files.pythonhosted.org install pika==1.0.0b2
 RUN pip3 --trusted-host pypi.org --trusted-host files.pythonhosted.org install aiohttp
 RUN pip3 --trusted-host pypi.org --trusted-host files.pythonhosted.org install asyncpg
 RUN pip3 --trusted-host pypi.org --trusted-host files.pythonhosted.org install quart
