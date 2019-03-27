@@ -1,6 +1,7 @@
 from lib.xml_writer import *
 from datetime import datetime
 
+import traceback
 import asyncio
 import logging
 import time
@@ -13,18 +14,24 @@ QUOTE_LIFESPAN = 60 # Time a quote is valid for (60 in production).
 QUOTE_CACHE_HOST = "quoteserve.seng.uvic.ca"
 QUOTE_CACHE_PORT = 4444
 QUOTE_SERVER_PRESENT = os.environ['http_proxy']
+QUOTE_LIMIT=100
 
 logger = logging.getLogger(__name__)
-loop = asyncio.get_event_loop()
 
-# This must be initialized from the entry point to ensure that
+# These must be initialized from the entry point to ensure that
 # the loop matches. It is guaranteed to run before anything
-# tries to access it, as the entry point calls this code before
+# tries to access it, as the entry point calls init() before
 # processing any transactions.
 reservation_timestamp_queue = None
+loop = None
+quote_sem = None
 
-async def reservation_timeout_handler(loop, pool):
-    """Helper function - used to cancel buy/sell orders after they timeout."""
+def init(entry_loop):
+    global quote_sem
+    quote_sem = asyncio.Semaphore(QUOTE_LIMIT, loop=entry_loop)
+
+    global loop
+    loop = entry_loop
 
     # Note that the expiry times stored in the queue do not necessarily correlate
     # with the reservation rows, due to clock drift and the passing of time
@@ -36,7 +43,10 @@ async def reservation_timeout_handler(loop, pool):
     # no reservations to process, as a buy/sell can be committed with no way to
     # remove the matching timestamp from the queue.
     global reservation_timestamp_queue
-    reservation_timestamp_queue = asyncio.Queue(loop=loop)
+    reservation_timestamp_queue = asyncio.Queue(loop=entry_loop)
+
+async def reservation_timeout_handler(pool):
+    """Helper function - used to cancel buy/sell orders after they timeout."""
 
     # Block until the first expiry time is available.
     expiry_time = await reservation_timestamp_queue.get()
@@ -89,6 +99,8 @@ async def reservation_timeout_handler(loop, pool):
                             await conn.execute(stocks_update, reservation["stock_quantity"],
                                     reservation["username"], reservation["stock_symbol"])
             except:
+                logger.exception("Buy/sell timeout task failed to commit.")
+
                 # An exception should not
                 # stop the entire task.
                 pass
@@ -106,21 +118,31 @@ async def get_quote(user_id, stock_symbol):
     request = "{symbol},{user}\r\n".format(symbol=stock_symbol, user=user_id)
 
     result = None
-    if QUOTE_SERVER_PRESENT:
-        reader, writer = await asyncio.open_connection(QUOTE_CACHE_HOST, QUOTE_CACHE_PORT)
 
-        writer.write(request.encode())
+    while not result:
+        async with quote_sem:
+            try:
+                if QUOTE_SERVER_PRESENT:
+                    reader, writer = await asyncio.open_connection(QUOTE_CACHE_HOST, QUOTE_CACHE_PORT, loop=loop)
 
-        raw = await reader.read(1024)
-        decoded = raw.decode()
-        result = decoded.split("\n")[0]
+                    writer.write(request.encode())
 
-        writer.close()
+                    raw = await reader.read(1024)
+                    decoded = raw.decode()
+                    result = decoded.split("\n")[0]
 
-    else:
-        # This sleep will mock production delays
-        # await asyncio.sleep(2)
-        result = "20.00,BAD,usernamehere,1549827515,crytoKEY=123=o"
+                    writer.close()
+
+                else:
+                    # This sleep will mock production delays
+                    # await asyncio.sleep(2)
+                    result = "20.00,BAD,usernamehere,1549827515,crytoKEY=123=o"
+
+            except:
+                logger.exception("Quote attempt failed for %s and %s.", user_id, stock_symbol)
+
+                # Some form of error occurred, try again.
+                pass
 
     price, symbol, username, timestamp, cryptokey = result.split(",")
     return float(price), int(timestamp), cryptokey, username
@@ -744,18 +766,18 @@ async def cancel_set_buy(transaction_num, user_id, stock_symbol, **settings):
         logger.info("SET_BUY found, cancelling")
         logger.debug("Refund amount for %s: %.02f", transaction_num, refund_amount)
 
+        users_update =  "UPDATE users               " \
+                        "SET balance = balance + $1 " \
+                        "WHERE username = $2        "
+
+        await conn.execute(users_update, refund_amount, user_id)
+
         triggers_delete =   "DELETE FROM triggers   " \
                             "WHERE username = $1    " \
                             "AND stock_symbol = $2  " \
                             "AND type = 'buy';      "
 
         await conn.execute(triggers_delete, user_id, stock_symbol)
-
-        users_update =  "UPDATE users               " \
-                        "SET balance = balance + $1 " \
-                        "WHERE username = $2        "
-
-        await conn.execute(users_update, refund_amount, user_id)
 
     transaction = AccountTransaction()
     attributes = {

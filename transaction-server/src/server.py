@@ -6,7 +6,6 @@ import asyncpg
 import asyncio
 import uvloop
 
-import traceback
 import logging
 import socket
 import time
@@ -84,8 +83,8 @@ class Processor:
                 # Database is still in a non-connectable state.
                 continue
 
-        loop = asyncio.get_event_loop()
-        loop.create_task(commands.reservation_timeout_handler(loop, self.pool))
+        commands.init(loop)
+        loop.create_task(commands.reservation_timeout_handler(self.pool))
         loop.create_task(commands.trigger_maintainer(self.pool, self.xml_tree))
 
     def _check_transaction(self, transaction):
@@ -99,7 +98,7 @@ class Processor:
             logger.info("Pattern %s matched %s.", pattern, groups)
             return (function, groups)
 
-    async def register_transaction(self, transaction):
+    async def register_transaction(self, transaction, loop):
         result = self._check_transaction(transaction)
         if not result:
             self._log_error(transaction)
@@ -121,9 +120,9 @@ class Processor:
             queue = self.users[username]
             logger.info("Added user %s to existing queue.", username)
         else:
-            queue = asyncio.Queue()
+            queue = asyncio.Queue(loop=loop)
             self.users[username] = queue
-            asyncio.create_task(self._handle_user(queue))
+            loop.create_task(self._handle_user(queue))
             logger.info("Created new queue (%s) for user %s.", id(queue), username)
 
         # There is an implicit race condition here that may occur if
@@ -219,7 +218,7 @@ async def root():
     logger.info("Request received with body %s.", transaction)
 
     # Queue up the transaction for processing by an async worker.
-    result = await processor.register_transaction(transaction)
+    result = await processor.register_transaction(transaction, loop)
     logger.info("Request stored with result %s.", result)
 
     response = jsonify(success=True)
