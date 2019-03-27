@@ -34,6 +34,20 @@ services:
         depends_on:
             - logging-db
             - rabbitmq
+    adminer-logging:
+        image: michalhosna/adminer:4.7.0
+        depends_on:
+            - logging-db
+        restart: on-failure
+        ports:
+            - 90:8080
+        environment:
+            - ADMINER_DRIVER=pgsql
+            - ADMINER_DB=postgres
+            - ADMINER_SERVER=logging-db
+            - ADMINER_USERNAME=${DB_USER}
+            - ADMINER_PASSWORD=${DB_PASS}
+            - ADMINER_AUTOLOGIN=1
     adminer:
         image: michalhosna/adminer:4.7.0
         depends_on:
