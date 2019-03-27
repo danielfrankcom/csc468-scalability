@@ -2,11 +2,11 @@
 # pylint: disable=C0111,C0103,R0205
 
 import functools
+from lib.logging_DB import logging_DB
+import json
 import logging
 import time
 import pika
-from lib.logging_DB import logging_DB
-import json
 
 from pika.adapters.asyncio_connection import AsyncioConnection
 
@@ -16,22 +16,10 @@ LOGGER = logging.getLogger(__name__)
 
 
 class Consumer(object):
-    """This is an example consumer that will handle unexpected interactions
-    with RabbitMQ such as channel and connection closures.
-
-    If RabbitMQ closes the connection, this class will stop and indicate
-    that reconnection is necessary. You should look at the output, as
-    there are limited reasons why the connection may be closed, which
-    usually are tied to permission related issues or socket timeouts.
-
-    If the channel is closed, it will indicate a problem with one of the
-    commands that were issued and that should surface in the output as well.
-
-    """
     EXCHANGE = 'logging'
     EXCHANGE_TYPE = 'topic'
     QUEUE = 'logs'
-    ROUTING_KEY = 'logging.logs'
+    ROUTING_KEY = 'logs'
 
     def __init__(self, amqp_url):
         """Create a new instance of the consumer class, passing in the AMQP
@@ -51,7 +39,7 @@ class Consumer(object):
         self._consuming = False
         # In production, experiment with higher prefetch values
         # for higher consumer throughput
-        self._prefetch_count = 100
+        self._prefetch_count = 1
 
     def connect(self):
         """This method connects to RabbitMQ, returning the connection handle.
@@ -85,15 +73,8 @@ class Consumer(object):
            The connection
 
         """
-        LOGGER.info('Connection opened')
-        # TODO: tell workload generator we are ready? Might not need to if whoever is running the workload watches for rabbitmq to be up
         self.db = logging_DB()
-        try:
-            logging_DB.connect()
-        except:
-            print("Cannot connect to database...")
-            self.on_connection_open_error()
-            return
+        LOGGER.info('Connection opened')
         self.open_channel()
 
     def on_connection_open_error(self, _unused_connection, err):
@@ -437,17 +418,17 @@ class ReconnectingConsumer(object):
             self._consumer = Consumer(self._amqp_url)
 
     def _get_reconnect_delay(self):
-        if self._consumer.was_consuming:
-            self._reconnect_delay = 0
-        else:
-            self._reconnect_delay += 1
-        if self._reconnect_delay > 30:
-            self._reconnect_delay = 30
-        return self._reconnect_delay
+        # if self._consumer.was_consuming:
+        #     self._reconnect_delay = 0
+        # else:
+        #     self._reconnect_delay = 1
+        # if self._reconnect_delay > 30:
+        #     self._reconnect_delay = 30
+        return 1
+
 
 
 logging.basicConfig(level=logging.DEBUG, format=LOG_FORMAT)
 amqp_url = 'amqp://admin:admin@rabbitmq:5672/%2F'
 consumer = ReconnectingConsumer(amqp_url)
 consumer.run()
-
