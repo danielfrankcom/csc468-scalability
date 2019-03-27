@@ -59,6 +59,7 @@ services:
         depends_on:
             - postgres
             - quote-cache
+            - rabbitmq
         restart: unless-stopped
         ports:
             - ${TRANSACTION_PORT}:5000
