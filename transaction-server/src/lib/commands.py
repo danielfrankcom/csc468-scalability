@@ -142,7 +142,7 @@ async def quote(transaction_num, user_id, stock_symbol, **settings):
         "type": "quoteServer",
         "data": data
     }
-    publisher.publish_message(json.dumps(message))
+    await publisher.publish_message(json.dumps(message))
 
     return new_price, stock_symbol, user_id, time_of_quote, cryptokey
 
@@ -161,7 +161,7 @@ async def add(transaction_num, user_id, amount, **settings):
         "type": "userCommand",
         "data": data
     }
-    publisher.publish(json.dumps(message))
+    await publisher.publish_message(json.dumps(message))
     
     query =  "INSERT INTO users (username, balance) " \
              "VALUES ($1, $2) " \
@@ -186,7 +186,7 @@ async def add(transaction_num, user_id, amount, **settings):
         "type": "accountTransaction",
         "data": data
     }
-    publisher.publish(json.dumps(message))
+    await publisher.publish_message(json.dumps(message))
 
 async def _get_latest_reserved(transaction_type, user_id, conn):
 
@@ -222,7 +222,7 @@ async def buy(transaction_num, user_id, stock_symbol, amount, **settings):
         "type": "userCommand",
         "data": data
     }
-    publisher.publish(json.dumps(message))
+    await publisher.publish_message(json.dumps(message))
     
     price, stock_symbol, user_id, time_of_quote, cryptokey = await quote(transaction_num, user_id, stock_symbol, **settings)
 
@@ -242,7 +242,7 @@ async def buy(transaction_num, user_id, stock_symbol, amount, **settings):
             "type": "errorEvent",
             "data": data
         }
-        publisher.publish_message(json.dumps(message))
+        await publisher.publish_message(json.dumps(message))
 
         logger.info("Amount insufficient to purchase at least 1 stock for %s.", transaction_num)
         return
@@ -275,7 +275,7 @@ async def buy(transaction_num, user_id, stock_symbol, amount, **settings):
                 "type": "errorEvent",
                 "data": data
             }
-            publisher.publish_message(json.dumps(message))
+            await publisher.publish_message(json.dumps(message))
 
             logger.info("Funds insufficient to purchase requested stock for %s", transaction_num)
             return
@@ -317,7 +317,7 @@ async def buy(transaction_num, user_id, stock_symbol, amount, **settings):
         "type": "accountTransaction",
         "data": data
     }
-    publisher.publish(json.dumps(message))
+    await publisher.publish_message(json.dumps(message))
 
 async def commit_buy(transaction_num, user_id, **settings):
     publisher = settings["publisher"]
@@ -334,7 +334,7 @@ async def commit_buy(transaction_num, user_id, **settings):
         "type": "userCommand",
         "data": data
     }
-    publisher.publish(json.dumps(message))
+    await publisher.publish_message(json.dumps(message))
     
     async with conn.transaction():
 
@@ -352,7 +352,7 @@ async def commit_buy(transaction_num, user_id, **settings):
                 "type": "errorEvent",
                 "data": data
             }
-            publisher.publish(json.dumps(message))
+            await publisher.publish_message(json.dumps(message))
 
             logger.info("No buy to commit for %s", transaction_num)
             return
@@ -386,7 +386,7 @@ async def cancel_buy(transaction_num, user_id, **settings):
         "type": "userCommand",
         "data": data
     }
-    publisher.publish(json.dumps(message))
+    await publisher.publish_message(json.dumps(message))
 
     async with conn.transaction():
 
@@ -404,7 +404,7 @@ async def cancel_buy(transaction_num, user_id, **settings):
                 "type": "errorEvent",
                 "data": data
             }
-            publisher.publish(json.dumps(message))
+            await publisher.publish_message(json.dumps(message))
 
             logger.info("No buy to cancel for %s", transaction_num)
             return
@@ -433,13 +433,12 @@ async def cancel_buy(transaction_num, user_id, **settings):
         "type": "accountTransaction",
         "data": data
     }
-    publisher.publish(json.dumps(message))
+    await publisher.publish_message(json.dumps(message))
 
 async def sell(transaction_num, user_id, stock_symbol, amount, **settings):
     publisher = settings["publisher"]
     conn = settings["conn"]
 
-    command = UserCommand()
     data = {
         "timestamp": int(time.time() * 1000), 
         "server": "DDJK",
@@ -453,7 +452,7 @@ async def sell(transaction_num, user_id, stock_symbol, amount, **settings):
         "type": "userCommand",
         "data": data
     }
-    publisher.publish(json.dumps(message))
+    await publisher.publish_message(json.dumps(message))
 
     price, stock_symbol, user_id, time_of_quote, cryptokey = await quote(transaction_num, user_id, stock_symbol, **settings)
 
@@ -473,7 +472,7 @@ async def sell(transaction_num, user_id, stock_symbol, amount, **settings):
             "type": "errorEvent",
             "data": data
         }
-        publisher.publish(json.dumps(message))
+        await publisher.publish_message(json.dumps(message))
 
         logger.info("Amount insufficient to sell at least 1 stock for %s.", transaction_num)
         return
@@ -503,7 +502,7 @@ async def sell(transaction_num, user_id, stock_symbol, amount, **settings):
                 "type": "errorEvent",
                 "data": data
             }
-            publisher.publish(json.dumps(message))
+            await publisher.publish_message(json.dumps(message))
 
             logger.info("Funds insufficient to purchase requested stock for %s", transaction_num)
             return
@@ -544,7 +543,7 @@ async def commit_sell(transaction_num, user_id, **settings):
         "type": "userCommand",
         "data": data
     }
-    publisher.publish(json.dumps(message))
+    await publisher.publish_message(json.dumps(message))
 
     async with conn.transaction():
 
@@ -562,7 +561,7 @@ async def commit_sell(transaction_num, user_id, **settings):
                 "type": "errorEvent",
                 "data": data
             }
-            publisher.publish(json.dumps(message))
+            await publisher.publish_message(json.dumps(message))
 
             logger.info("No sell to commit for %s", transaction_num)
             return
@@ -590,7 +589,7 @@ async def commit_sell(transaction_num, user_id, **settings):
         "type": "accountTransaction",
         "data": data
     }
-    publisher.publish(json.dumps(message))
+    await publisher.publish_message(json.dumps(message))
 
 async def cancel_sell(transaction_num, user_id, **settings):
     publisher = settings["publisher"]
@@ -607,7 +606,7 @@ async def cancel_sell(transaction_num, user_id, **settings):
         "type": "userCommand",
         "data": data
     }
-    publisher.publish(json.dumps(message))
+    await publisher.publish_message(json.dumps(message))
 
     async with conn.transaction():
 
@@ -625,7 +624,7 @@ async def cancel_sell(transaction_num, user_id, **settings):
                 "type": "errorEvent",
                 "data": data
             }
-            publisher.publish(json.dumps(message))
+            await publisher.publish_message(json.dumps(message))
 
             logger.info("No sell to cancel for %s", transaction_num)
             return
@@ -661,7 +660,7 @@ async def set_buy_amount(transaction_num, user_id, stock_symbol, amount, **setti
         "type": "userCommand",
         "data": data
     }
-    publisher.publish(json.dumps(message))
+    await publisher.publish_message(json.dumps(message))
 
     async with conn.transaction():
 
@@ -699,7 +698,7 @@ async def set_buy_amount(transaction_num, user_id, stock_symbol, amount, **setti
                 "type": "errorEvent",
                 "data": data
             }
-            publisher.publish(json.dumps(message))
+            await publisher.publish_message(json.dumps(message))
             return
 
         logger.debug("Balance of %s: %.02f is sufficient for %s", user_id, balance, transaction_num)
@@ -741,7 +740,7 @@ async def set_buy_amount(transaction_num, user_id, stock_symbol, amount, **setti
         "type": "accountTransaction",
         "data": data
     }
-    publisher.publish(json.dumps(message))   
+    await publisher.publish_message(json.dumps(message))   
 
 async def cancel_set_buy(transaction_num, user_id, stock_symbol, **settings):
     publisher = settings["publisher"]
@@ -759,7 +758,7 @@ async def cancel_set_buy(transaction_num, user_id, stock_symbol, **settings):
         "type": "userCommand",
         "data": data
     }
-    publisher.publish(json.dumps(message))
+    await publisher.publish_message(json.dumps(message))
     
     async with conn.transaction():
 
@@ -785,7 +784,7 @@ async def cancel_set_buy(transaction_num, user_id, stock_symbol, **settings):
                 "type": "errorEvent",
                 "data": data
             }
-            publisher.publish(json.dumps(message))
+            await publisher.publish_message(json.dumps(message))
 
             logger.info("SET_BUY does not exist, no action taken")
             return
@@ -818,7 +817,7 @@ async def cancel_set_buy(transaction_num, user_id, stock_symbol, **settings):
         "type": "accountTransaction",
         "data": data
     }
-    publisher.publish(json.dumps(message))
+    await publisher.publish_message(json.dumps(message))
 
 async def set_buy_trigger(transaction_num, user_id, stock_symbol, amount, **settings):
     publisher = settings["publisher"]
@@ -837,7 +836,7 @@ async def set_buy_trigger(transaction_num, user_id, stock_symbol, amount, **sett
         "type": "userCommand",
         "data": data
     }
-    publisher.publish(json.dumps(message))
+    await publisher.publish_message(json.dumps(message))
 
     async with conn.transaction():
 
@@ -863,7 +862,7 @@ async def set_buy_trigger(transaction_num, user_id, stock_symbol, amount, **sett
                 "type": "errorEvent",
                 "data": data
             }
-            publisher.publish(json.dumps(message))
+            await publisher.publish_message(json.dumps(message))
 
             logger.info("SET_BUY does not exist, no action taken")
             return
@@ -895,7 +894,7 @@ async def set_sell_amount(transaction_num, user_id, stock_symbol, requested_tran
         "type": "userCommand",
         "data": data
     }
-    publisher.publish(json.dumps(message))
+    await publisher.publish_message(json.dumps(message))
 
     async with conn.transaction():
 
@@ -917,7 +916,7 @@ async def set_sell_amount(transaction_num, user_id, stock_symbol, requested_tran
                 "type": "errorEvent",
                 "data": data
             }
-            publisher.publish(json.dumps(message))
+            await publisher.publish_message(json.dumps(message))
             return
 
         # If a trigger already exists, we need to recalculate the required stock.
@@ -973,7 +972,7 @@ async def set_sell_amount(transaction_num, user_id, stock_symbol, requested_tran
                         "type": "errorEvent",
                         "data": data
                     }
-                    publisher.publish(json.dumps(message))
+                    await publisher.publish_message(json.dumps(message))
                     return
 
                 logger.info("User owns enough stocks for transaction %s to proceed.", transaction_num)
@@ -1022,7 +1021,7 @@ async def cancel_set_sell(transaction_num, user_id, stock_symbol, **settings):
         "type": "userCommand",
         "data": data
     }
-    publisher.publish(json.dumps(message))
+    await publisher.publish_message(json.dumps(message))
 
     async with conn.transaction():
 
@@ -1048,7 +1047,7 @@ async def cancel_set_sell(transaction_num, user_id, stock_symbol, **settings):
                 "type": "errorEvent",
                 "data": data
             }
-            publisher.publish(json.dumps(message))
+            await publisher.publish_message(json.dumps(message))
 
             logger.info("SET_SELL does not exist, no action taken")
             return
@@ -1095,7 +1094,7 @@ async def set_sell_trigger(transaction_num, user_id, stock_symbol, requested_tri
         "type": "userCommand",
         "data": data
     }
-    publisher.publish(json.dumps(message))
+    await publisher.publish_message(json.dumps(message))
 
     async with conn.transaction():
     
@@ -1121,7 +1120,7 @@ async def set_sell_trigger(transaction_num, user_id, stock_symbol, requested_tri
                 "type": "errorEvent",
                 "data": data
             }
-            publisher.publish(json.dumps(message))
+            await publisher.publish_message(json.dumps(message))
 
             logger.info("SET_SELL does not exist, no action taken")
             return
@@ -1166,7 +1165,7 @@ async def set_sell_trigger(transaction_num, user_id, stock_symbol, requested_tri
                 "type": "errorEvent",
                 "data": data
             }
-            publisher.publish(json.dumps(message))
+            await publisher.publish_message(json.dumps(message))
             return
 
         logger.info("User owns enough stocks for transaction %s to proceed.", transaction_num)
@@ -1263,7 +1262,7 @@ async def _process_trigger(record, pool, publisher):
         "type": "accountTransaction",
         "data": data
     }
-    publisher.publish(json.dumps(message))
+    await publisher.publish_message(json.dumps(message))
 
 async def trigger_maintainer(pool, publisher):
 
@@ -1308,7 +1307,7 @@ def dumplog(transaction_num, filename, publisher):
         "type": "userCommand",
         "data": data
     }
-    publisher.publish(json.dumps(message))
+    publisher.publish_message(json.dumps(message))
 
 # Deprecated.
 def dumplog_user(transaction_num, user_id, filename, publisher):
@@ -1323,7 +1322,7 @@ def dumplog_user(transaction_num, user_id, filename, publisher):
         "type": "userCommand",
         "data": data
     }
-    publisher.publish(json.dumps(message))
+    publisher.publish_message(json.dumps(message))
 
 # Deprecated.
 def display_summary(transaction_num, user_id, publisher):
@@ -1338,4 +1337,4 @@ def display_summary(transaction_num, user_id, publisher):
         "type": "userCommand",
         "data": data
     }
-    publisher.publish(json.dumps(message))
+    publisher.publish_message(json.dumps(message))

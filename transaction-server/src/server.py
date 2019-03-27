@@ -4,6 +4,7 @@ from lib.publisher import Publisher
 from quart import Quart, request, jsonify
 import asyncpg
 import asyncio
+import asyncio
 import uvloop
 
 import traceback
@@ -53,8 +54,7 @@ class Processor:
         self.users = dict()
 
 
-        self.publisher = Publisher('amqp://admin:admin@rabbitmq:5672/%2F?connection_attempts=10&heartbeat=3600')
-        self.publisher.run()
+        self.publisher = Publisher()
 
         # It is possible that the postgres container has started
         # but is not ready for connections. We poll until it is
@@ -158,7 +158,6 @@ class Processor:
             logger.debug("Error information for %s: %s, %s, %s.",
                     transaction, transaction_num, command, user_id)
 
-            error = ErrorEvent()
             data = {
                 "timestamp": int(time.time() * 1000),
                 "server": "DDJK",
@@ -167,11 +166,11 @@ class Processor:
                 "command": command,
                 "error_message": "Error while processing command"
             }
-            error = {
+            message = {
                 "type":"errorEvent",
                 "data": data
             }
-            self.publisher.publish_message(json.dumps(error))
+            self.publisher.publish_message(json.dumps(message))
         except:
             logger.exception("Error logging failed for %s.", transaction)
 
