@@ -1,16 +1,13 @@
 import psycopg2
-from config import config
 
 class logging_DB(object):
-    def connect(self):
+    def __init__(self):
         """ Connect to the PostgreSQL database server """
-        conn = None
+        self.conn = None
         try:
-            # read connection parameters
-            params = config()
             # connect to the PostgreSQL server
             print('Connecting to the PostgreSQL database...')
-            self.conn = psycopg2.connect(**params)
+            self.conn = psycopg2.connect(host="logging-db",database="postgres",user="postgres",password="supersecure")
         except (Exception, psycopg2.DatabaseError) as error:
             print(error)
 
@@ -22,7 +19,7 @@ class logging_DB(object):
         server = data["server"]
         transaction_num = data["transaction_num"]
         command = data["command"]
-        username, stock_symbol, funds = "DEFAULT"
+        username = stock_symbol = funds = None
         if "username" in data:
             username = data["username"]
         if "stock_symbol" in data:
@@ -60,13 +57,13 @@ class logging_DB(object):
         transaction_num = data["transaction_num"]
         action = data["action"]
         username = data["username"]
-        funds = "DEFAULT"
+        funds = None
         if "funds" in data:
             funds = data["funds"]
 
         cur = self.conn.cursor()
         sql = f"""INSERT INTO accounttransactions (timestamp, server, transaction_num, action, username, funds)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s) """
+                    VALUES (%s,%s,%s,%s,%s,%s) """
         cur.execute(sql, (timestamp,server,transaction_num,action,username,funds))
         self.conn.commit()
         cur.close()
@@ -76,7 +73,7 @@ class logging_DB(object):
         server = data["server"]
         transaction_num = data["transaction_num"]
         command = data["command"]
-        username, stock_symbol, funds = "DEFAULT"
+        username = stock_symbol = funds = None
         if "username" in data:
             username = data["username"]
         if "stock_symbol" in data:
@@ -96,7 +93,7 @@ class logging_DB(object):
         server = data["server"]
         transaction_num = data["transaction_num"]
         command = data["command"]
-        username, stock_symbol, funds, error_message = "DEFAULT"
+        username = stock_symbol = funds = error_message = None
         if "username" in data:
             username = data["username"]
         if "stock_symbol" in data:
@@ -108,7 +105,7 @@ class logging_DB(object):
 
         cur = self.conn.cursor()
         sql = f"""INSERT INTO errorevents (timestamp, server, transaction_num, command, username, stock_symbol, funds, error_message)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s) """
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s) """
         cur.execute(sql, (timestamp,server,transaction_num,command,username,stock_symbol,funds,error_message))
         self.conn.commit()
         cur.close()
@@ -118,7 +115,7 @@ class logging_DB(object):
         server = data["server"]
         transaction_num = data["transaction_num"]
         command = data["command"]
-        username, stock_symbol, funds, debug_message = "DEFAULT"
+        username = stock_symbol = funds = debug_message = None
         if "username" in data:
             username = data["username"]
         if "stock_symbol" in data:
@@ -130,7 +127,7 @@ class logging_DB(object):
 
         cur = self.conn.cursor()
         sql = f"""INSERT INTO debugevents (timestamp, server, transaction_num, command, username, stock_symbol, funds, debug_message)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s) """
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s) """
         cur.execute(sql, (timestamp,server,transaction_num,command,username,stock_symbol,funds,debug_message))
         self.conn.commit()
         cur.close()
