@@ -132,6 +132,7 @@ async def get_quote(user_id, stock_symbol):
                     result = decoded.split("\n")[0]
 
                     writer.close()
+                    await writer.wait_closed()
 
                 else:
                     # This sleep will mock production delays
