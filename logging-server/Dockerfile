@@ -3,12 +3,11 @@ FROM python:3.7-alpine
 # Grab proxy settings to allow internet access.
 ENV http_proxy=$HTTP_PROXY
 ENV https_proxy=$HTTPS_PROXY
-
+RUN apk update && apk add postgresql-dev gcc python3-dev musl-dev
 RUN pip3 --trusted-host pypi.org --trusted-host files.pythonhosted.org install --upgrade pip 
 RUN pip3 --trusted-host pypi.org --trusted-host files.pythonhosted.org install pika==1.0.0b2
 RUN pip3 --trusted-host pypi.org --trusted-host files.pythonhosted.org install psycopg2
 
-EXPOSE 5672
 
 WORKDIR /src
 
