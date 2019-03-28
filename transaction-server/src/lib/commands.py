@@ -4,6 +4,7 @@ from datetime import datetime
 import traceback
 import asyncio
 import logging
+import socket
 import time
 import os
 
@@ -115,7 +116,8 @@ async def reservation_timeout_handler(pool):
 async def get_quote(user_id, stock_symbol):
     """Fetch a quote from the quote cache."""
 
-    request = "{symbol},{user}\r\n".format(symbol=stock_symbol, user=user_id)
+    request = "{symbol},{user}\n".format(symbol=stock_symbol, user=user_id)
+    encoded = request.encode("ascii")
 
     result = None
 
@@ -123,16 +125,26 @@ async def get_quote(user_id, stock_symbol):
         async with quote_sem:
             try:
                 if QUOTE_SERVER_PRESENT:
-                    reader, writer = await asyncio.open_connection(QUOTE_CACHE_HOST, QUOTE_CACHE_PORT, loop=loop)
+                    sock = socket.socket()
+                    with sock:
+                        sock.setblocking(False)
 
-                    writer.write(request.encode())
+                        await loop.sock_connect(sock, (QUOTE_CACHE_HOST, QUOTE_CACHE_PORT))
+                        #reader, writer = await asyncio.open_connection(QUOTE_CACHE_HOST, QUOTE_CACHE_PORT, loop=loop)
 
-                    raw = await reader.read(1024)
-                    decoded = raw.decode()
-                    result = decoded.split("\n")[0]
+                        await loop.sock_sendall(sock, encoded)
+                        raw = await loop.sock_recv(sock, 1024)
 
-                    writer.close()
-                    await writer.wait_closed()
+                        sock.shutdown(socket.SHUT_RDWR)
+
+                        #writer.write(encoded)
+
+                        #raw = await reader.read(1024)
+                        decoded = raw.decode("ascii")
+                        result = decoded.strip()
+
+                        #writer.close()
+                        #await writer.wait_closed()
 
                 else:
                     # This sleep will mock production delays

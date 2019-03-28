@@ -258,7 +258,7 @@ class LogBuilder:
     """
     def _processFile(self, filename):
 
-        f = open(filename, "w+", encoding="utf-8")
+        f = open(filename, "w+", encoding="ascii")
         
         while (True):
             item = LogBuilder.queue.get()
