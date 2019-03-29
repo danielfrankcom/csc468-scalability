@@ -20,7 +20,7 @@ class Publisher(object):
                 break
         self.channel = self.connection.channel()
         self.channel.queue_declare(queue='logs')
-        logger.debug("Finishing init of Publisher")
+        logger.debug("Finished init of Publisher")
 
     async def publish_message(self,message):
         logger.info("Publishing message %s", message)
