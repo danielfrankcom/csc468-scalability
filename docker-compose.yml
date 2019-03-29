@@ -34,6 +34,8 @@ services:
         depends_on:
             - logging-db
             - rabbitmq
+        volumes:
+            - ./logging-server/out:/out:rw
     adminer-logging:
         image: michalhosna/adminer:4.7.0
         depends_on:
