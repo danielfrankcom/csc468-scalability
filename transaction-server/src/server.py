@@ -70,7 +70,6 @@ class Processor:
 
         self.users = dict()
 
-
         self.publisher = Publisher()
 
         # It is possible that the postgres container has started
@@ -105,6 +104,37 @@ class Processor:
         loop = asyncio.get_event_loop()
         loop.create_task(commands.reservation_timeout_handler(loop, self.pool))
         loop.create_task(commands.trigger_maintainer(self.pool, self.publisher))
+
+    def _log_error(self, transaction):
+
+        try:
+            match = re.match(ERROR_PATTERN, transaction)
+            if not match:
+                # Incapable of finding even the most basic info
+                # in the transaction, so throw it away.
+                logger.error("Unable to find enough info to log %s.", transaction)
+                return
+
+            transaction_num, command, user_id = match.groups()
+            transaction_num = int(transaction_num)
+            logger.debug("Error information for %s: %s, %s, %s.",
+                    transaction, transaction_num, command, user_id)
+
+            data = {
+                "timestamp": int(time.time() * 1000),
+                "server": "DDJK",
+                "transaction_num": transaction_num,
+                "username": user_id,
+                "command": command,
+                "error_message": "Error while processing command"
+            }
+            message = {
+                "type":"errorEvent",
+                "data": data
+            }
+            self.publisher.publish_message(json.dumps(message))
+        except:
+            logger.exception("Error logging failed for %s.", transaction)
 
     async def _handle_dumplog(self, transaction, *args):
         settings = {
@@ -194,37 +224,6 @@ class Processor:
         logger.debug("Transaction %s added to queue.", transaction)
 
         return True
-
-    def _log_error(self, transaction):
-
-        try:
-            match = re.match(ERROR_PATTERN, transaction)
-            if not match:
-                # Incapable of finding even the most basic info
-                # in the transaction, so throw it away.
-                logger.error("Unable to find enough info to log %s.", transaction)
-                return
-
-            transaction_num, command, user_id = match.groups()
-            transaction_num = int(transaction_num)
-            logger.debug("Error information for %s: %s, %s, %s.",
-                    transaction, transaction_num, command, user_id)
-
-            data = {
-                "timestamp": int(time.time() * 1000),
-                "server": "DDJK",
-                "transaction_num": transaction_num,
-                "username": user_id,
-                "command": command,
-                "error_message": "Error while processing command"
-            }
-            message = {
-                "type":"errorEvent",
-                "data": data
-            }
-            self.publisher.publish_message(json.dumps(message))
-        except:
-            logger.exception("Error logging failed for %s.", transaction)
 
     async def _handle_user(self, queue):
         # In theory creating a new async worker for each user
