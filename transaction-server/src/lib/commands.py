@@ -1300,7 +1300,8 @@ async def dumplog(transaction_num, filename, **settings):
         "timestamp": int(time.time() * 1000), 
         "server": "DDJK",
         "transaction_num": transaction_num,
-        "command": "DUMPLOG"
+        "command": "DUMPLOG",
+        "filename": filename
     }
     message = {
         "type": "userCommand",
@@ -1315,7 +1316,8 @@ async def dumplog_user(transaction_num, user_id, filename, *settings):
         "server": "DDJK",
         "transaction_num": transaction_num,
         "command": "DUMPLOG",
-        "username": user_id
+        "username": user_id,
+        "filename": filename
     }
     message = {
         "type": "userCommand",
