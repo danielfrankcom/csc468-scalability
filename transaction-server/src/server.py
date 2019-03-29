@@ -258,6 +258,7 @@ class Processor:
                 
 
 logging.basicConfig(level=logging.DEBUG)
+logging.getLogger('pika').setLevel(logging.CRITICAL)
 logger = logging.getLogger(__name__)
 
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
