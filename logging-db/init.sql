@@ -13,6 +13,7 @@ CREATE TABLE usercommands (
 	command VARCHAR(20) NOT NULL,
 	username VARCHAR(20),
 	stock_symbol VARCHAR(3),
+	filename VARCHAR(20),
 	funds FLOAT
 );
 
@@ -43,6 +44,7 @@ CREATE TABLE systemevents (
 	command VARCHAR(20) NOT NULL,
 	username VARCHAR(20),
 	stock_symbol VARCHAR(3),
+	filename VARCHAR(20),
 	funds FLOAT
 );
 
@@ -53,6 +55,7 @@ CREATE TABLE errorevents (
 	command VARCHAR(20) NOT NULL,
 	username VARCHAR(20),
 	stock_symbol VARCHAR(3),
+	filename VARCHAR(20),
 	funds FLOAT,
 	error_message VARCHAR(100)
 );
@@ -64,6 +67,7 @@ CREATE TABLE debugevents (
 	command VARCHAR(20) NOT NULL,
 	username VARCHAR(20),
 	stock_symbol VARCHAR(3),
+	filename VARCHAR(20),
 	funds FLOAT,
 	debug_message VARCHAR(100)
 );
