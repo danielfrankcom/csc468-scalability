@@ -1294,8 +1294,8 @@ async def trigger_maintainer(pool, publisher):
         await asyncio.sleep(sleep_time)
         logging.debug("Trigger maintainer woke up")
 
-# Deprecated.
-def dumplog(transaction_num, filename, publisher):
+async def dumplog(transaction_num, filename, **settings):
+    publisher = settings["publisher"]
     command = UserCommand()
     data = {
         "timestamp": int(time.time() * 1000), 
@@ -1307,10 +1307,10 @@ def dumplog(transaction_num, filename, publisher):
         "type": "userCommand",
         "data": data
     }
-    publisher.publish_message(json.dumps(message))
+    await publisher.publish_message(json.dumps(message))
 
-# Deprecated.
-def dumplog_user(transaction_num, user_id, filename, publisher):
+async def dumplog_user(transaction_num, user_id, filename, *settings):
+    publisher = settings["publisher"]
     data = {
         "timestamp": int(time.time() * 1000), 
         "server": "DDJK",
@@ -1322,10 +1322,10 @@ def dumplog_user(transaction_num, user_id, filename, publisher):
         "type": "userCommand",
         "data": data
     }
-    publisher.publish_message(json.dumps(message))
+    await publisher.publish_message(json.dumps(message))
 
-# Deprecated.
-def display_summary(transaction_num, user_id, publisher):
+async def display_summary(transaction_num, user_id, **settings):
+    publisher = settings["publisher"]
     data = {
         "timestamp": int(time.time() * 1000), 
         "server": "DDJK",
@@ -1337,4 +1337,4 @@ def display_summary(transaction_num, user_id, publisher):
         "type": "userCommand",
         "data": data
     }
-    publisher.publish_message(json.dumps(message))
+    await publisher.publish_message(json.dumps(message))
