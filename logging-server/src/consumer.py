@@ -1,8 +1,11 @@
 from lib.logging_DB import logging_DB
+import logging
 import json
 import pika
 import time
 import threading
+
+logger = logging.getLogger(__name__)
 
 class Consumer(object):
     def __init__(self):
@@ -12,22 +15,22 @@ class Consumer(object):
             try:
                 self.connection = pika.BlockingConnection(pika.ConnectionParameters(host='rabbitmq',credentials=credentials))
             except:
-                print("Cannot connect to RabbitMQ, trying again in 1 seconds...",flush=True)
+                logger.info("Cannot connect to RabbitMQ, trying again in 1 seconds...")
                 time.sleep(1)
                 continue
             else:
-                print("RabbitMQ Connection successful...",flush=True)
+                logger.info("RabbitMQ Connection successful...")
                 break
         self.db = None
         while True:
             try:
                 self.db = logging_DB()
             except:
-                print("Cannot connect to DB, trying again in 1 seconds...",flush=True)
+                logger.info("Cannot connect to DB, trying again in 1 seconds...")
                 time.sleep(1)
                 continue
             else:
-                print("Connected to DB!",flush=True)
+                logger.info("Connected to DB!")
                 break
 
         self.channel = self.connection.channel()
@@ -35,10 +38,10 @@ class Consumer(object):
         self.channel.basic_consume(consumer_callback=self.callback, queue='logs', no_ack=True)
         consumer_thread = threading.Thread(target=self.consume)
         consumer_thread.start()
-        print("Consumer ready to consume NOM NOM NOM",flush=True)
+        logger.debug("Finished init of Consumer")
 
     def callback(self, ch, method, properties, body):
-        print(f"Consumed {body}",flush=True)
+        logger.info("Consumed %s",body)
         j = json.loads(body)
         log_type = j["type"]
         data = j["data"]
@@ -55,7 +58,7 @@ class Consumer(object):
         elif log_type == "debugEvent":
             self.db.debugEvent(data)
         else:
-            print("\n\n\n ERROR TYPE NOT FOUND",log_type)
+            logger.error("MESSAGE TYPE NOT FOUND %s",log_type)
     
     def consume(self):
         self.channel.start_consuming()  

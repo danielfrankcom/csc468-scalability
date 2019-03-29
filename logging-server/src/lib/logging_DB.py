@@ -1,5 +1,8 @@
 import psycopg2
+import logging
 from lib.xml_writer import *
+
+logger = logging.getLogger(__name__)
 
 class logging_DB(object):
     def __init__(self):
@@ -7,10 +10,10 @@ class logging_DB(object):
         self.conn = None
         try:
             # connect to the PostgreSQL server
-            print('Connecting to the PostgreSQL database...')
+            logger.info('Connecting to the PostgreSQL database...')
             self.conn = psycopg2.connect(host="logging-db",database="postgres",user="postgres",password="supersecure")
         except (Exception, psycopg2.DatabaseError) as error:
-            print(error)
+            logger.error(error)
 
     def disconnect(self):
         self.conn.close()
@@ -160,7 +163,8 @@ class logging_DB(object):
             cur.close()
         combined = usercommands + accounttransactions
         sorted_combined = sorted(combined, key=lambda x: x[0])
-        builder = LogBuilder()
+        log_path = str("/out/"+filename)
+        builder = LogBuilder(log_path)
         for row in sorted_combined:
             if len(row) == 8: # user command
                 columns = "timestamp server transactionNum command username stockSymbol filename funds".split(" ")
@@ -176,7 +180,7 @@ class logging_DB(object):
                     if col is not None:
                         event.update(columns[idx],col)
                 builder.append(event)
-        builder.write(filename)
+        # builder.write(filename)
 
             
         
