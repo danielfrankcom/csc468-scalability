@@ -53,6 +53,8 @@ PROCESSORS = {
         "DISPLAY_SUMMARY": (commands.display_summary, build_regex("DISPLAY_SUMMARY", R_USERNAME))
 }
 
+DUMPLOG_PATTERN = build_regex("DUMPLOG", R_FILENAME)
+
 COMMAND_TYPE_PATTERN = re.compile(r"^\[\d+\] ([A-Z_]+)")
 ERROR_PATTERN = re.compile(r"^\[(\d+)\] ([A-Z_]+),([^ ,]+)")
 
@@ -104,6 +106,18 @@ class Processor:
         loop.create_task(commands.reservation_timeout_handler(self.pool))
         loop.create_task(commands.trigger_maintainer(self.pool, self.xml_tree))
 
+    async def _handle_dumplog(self, transaction, *args):
+        settings = {
+                "publisher": self.publisher
+        }
+
+        try:
+            await commands.dumplog(*args, **settings)
+            logger.info("Work item completed for transaction %s.", transaction)
+        except:
+            logger.exception("Work item failed for transaction %s.", transaction)
+            self._log_error(transaction)
+
     async def register_transaction(self, transaction, callback=None):
 
         type_match = re.match(COMMAND_TYPE_PATTERN, transaction)
@@ -119,16 +133,36 @@ class Processor:
 
         processor, validity_pattern = PROCESSORS[command_type]
         match = re.match(validity_pattern, transaction)
-        if not match:
-            self._log_error(transaction)
-            logger.debug("Pattern for transaction %s is invalid, discarding.", transaction)
-            return False
 
+        if not match:
+            # There is a special case that we must account for, in that there is a derivation
+            # of DUMPLOG that does not contain a username, and applies to all users. If we
+            # see 'DUMPLOG', we may fail to match on it, as it may not have a username. Here
+            # we check for this special case explicitly.
+
+            dumplog_match = re.match(DUMPLOG_PATTERN, transaction)
+            if not dumplog_match:
+                self._log_error(transaction)
+                logger.debug("Pattern for transaction %s is invalid, discarding.", transaction)
+                return False
+
+            dumplog_groups = dumplog_match.groups()
+
+            # We cannot fall through and use the code below, as it assumes that a specific
+            # user is responsible for the command. Instead, initialize a new task to deal
+            # with this command.
+            asyncio.create_task(self._handle_dumplog(transaction, *dumplog_groups))
+
+            # Return early as we don't want a specific user to deal with this command.
+            return True
+            
+
+        # At this point, we have a valid and standard command (with a username)
         groups = match.groups()
         logger.info("Pattern %s matched %s.", validity_pattern, groups)
 
-        # Note that we are not expecting the DUMPLOG command at the moment,
-        # as it contains no username.
+        # Note that we are not expecting the DUMPLOG (with no user) command at the moment,
+        # as it should have been dealt with above and contains no username.
         username = groups[1]
         logger.debug("Username %s found for %s.", username, transaction)
 

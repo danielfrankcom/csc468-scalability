@@ -1271,7 +1271,8 @@ async def trigger_maintainer(pool, xml_tree):
         logging.debug("Trigger maintainer woke up")
 
 # Deprecated.
-def dumplog(transaction_num, filename, XMLTree):
+async def dumplog(transaction_num, filename, **settings):
+	xml_tree = settings["xml_tree"]
     command = UserCommand()
     attributes = {
         "timestamp": int(time.time() * 1000), 
@@ -1280,10 +1281,11 @@ def dumplog(transaction_num, filename, XMLTree):
         "command": "DUMPLOG"
     }
     command.updateAll(**attributes)
-    XMLTree.append(command)
+    xml_tree.append(command)
 
 # Deprecated.
-def dumplog_user(transaction_num, user_id, filename, XMLTree):
+async def dumplog_user(transaction_num, user_id, filename, **settings):
+	xml_tree = settings["xml_tree"]
     command = UserCommand()
     attributes = {
         "timestamp": int(time.time() * 1000), 
@@ -1293,10 +1295,11 @@ def dumplog_user(transaction_num, user_id, filename, XMLTree):
         "username": user_id
     }
     command.updateAll(**attributes)
-    XMLTree.append(command)
+    xml_tree.append(command)
 
 # Deprecated.
-def display_summary(transaction_num, user_id, XMLTree):
+async def display_summary(transaction_num, user_id, **settings):
+	xml_tree = settings["xml_tree"]
     command = UserCommand()
     attributes = {
         "timestamp": int(time.time() * 1000), 
@@ -1306,5 +1309,5 @@ def display_summary(transaction_num, user_id, XMLTree):
         "username": user_id
     }
     command.updateAll(**attributes)
-    XMLTree.append(command)
+    xml_tree.append(command)
 
