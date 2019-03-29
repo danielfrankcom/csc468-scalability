@@ -1296,7 +1296,6 @@ async def trigger_maintainer(pool, publisher):
 
 async def dumplog(transaction_num, filename, **settings):
     publisher = settings["publisher"]
-    command = UserCommand()
     data = {
         "timestamp": int(time.time() * 1000), 
         "server": "DDJK",
