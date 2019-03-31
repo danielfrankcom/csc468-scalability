@@ -18,6 +18,7 @@ QUOTE_SERVER_PRESENT = os.environ['http_proxy']
 QUOTE_LIMIT=100
 
 logger = logging.getLogger(__name__)
+host = socket.gethostname()
 
 # These must be initialized from the entry point to ensure that
 # the loop matches. It is guaranteed to run before anything
@@ -116,7 +117,7 @@ async def reservation_timeout_handler(pool):
 async def get_quote(user_id, stock_symbol):
     """Fetch a quote from the quote cache."""
 
-    request = "{symbol},{user}\n".format(symbol=stock_symbol, user=user_id)
+    request = "{symbol},{user}\r\n".format(symbol=stock_symbol.strip(), user=user_id.strip())
     encoded = request.encode("ascii")
 
     result = None
@@ -125,17 +126,21 @@ async def get_quote(user_id, stock_symbol):
         async with quote_sem:
             try:
                 if QUOTE_SERVER_PRESENT:
-                    sock = socket.socket()
-                    with sock:
-                        sock.setblocking(False)
+                    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
+                    with sock:
+                        #sock.setblocking(False)
+
+                        sock.bind((host, 0))
                         await loop.sock_connect(sock, (QUOTE_CACHE_HOST, QUOTE_CACHE_PORT))
-                        #reader, writer = await asyncio.open_connection(QUOTE_CACHE_HOST, QUOTE_CACHE_PORT, loop=loop)
+                        #await loop.sock_connect(sock, (QUOTE_CACHE_HOST, QUOTE_CACHE_PORT))
+
+                        #reader, writer = await asyncio.open_connection(QUOTE_CACHE_HOST, QUOTE_CACHE_PORT, sock=sock, loop=loop)
+                    #reader, writer = await asyncio.open_connection(QUOTE_CACHE_HOST, QUOTE_CACHE_PORT, local_addr=("127.0.0.1", 1245), loop=loop)
 
                         await loop.sock_sendall(sock, encoded)
                         raw = await loop.sock_recv(sock, 1024)
 
-                        sock.shutdown(socket.SHUT_RDWR)
 
                         #writer.write(encoded)
 
@@ -145,6 +150,14 @@ async def get_quote(user_id, stock_symbol):
 
                         #writer.close()
                         #await writer.wait_closed()
+
+                        #try:
+                        sock.shutdown(socket.SHUT_RDWR)
+                        #except:
+                            # Sometimes this fails as the server has already
+                            # closed the socket. If this happens, the correct
+                            # outcome has aready been achieved, skip.
+                            #pass
 
                 else:
                     # This sleep will mock production delays
