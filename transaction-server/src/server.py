@@ -11,6 +11,7 @@ import socket
 import time
 import os
 import re
+import json
 
 
 DB = DB_USER = DB_HOST = "postgres"
@@ -223,5 +224,33 @@ async def root():
 
     response = jsonify(success=True)
     return response
+
+transaction_num = 0
+
+@app.route('/api', methods=['POST'])
+def api():
+    global transaction_num
+    transaction_num+=1
+    
+    body = request.data
+    payload = json.loads(body)
+    username = payload["username"]
+    transaction = f"[{transaction_num}] {payload['command']}"
+    
+
+    # Queue up the transaction for processing by an async worker.
+    result = processor.register_transaction(transaction)
+    
+    # get stuff from database
+    newBalance = None
+    newTriggers = None
+    newStocks = None
+    response = {
+        "errors": [],
+        "balance": newBalance,
+        "triggers": newTriggers,
+        "stocks": newStocks
+    }
+    return jsonify(response)
 
 app.run(host="0.0.0.0", port="5000", loop=loop)
