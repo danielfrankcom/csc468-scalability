@@ -555,7 +555,19 @@
       var command = "";
       if(check_dollar_amount(dollar_amount)){
         command = command.concat("ADD,", username, "," , dollar_amount);
-        alert(command);
+        payload = {
+          "username": username,
+          "command": command
+        }
+        $.post('transaction-server:5000/api',payload,(data,status)=>{
+              // handle the data (update the html)
+              if(data.errors){
+                window.alert("Errrrror");
+              } else {
+                window.alert("It worked");
+              }
+              window.location.replace("index.html");
+            });
       }
     }
 
