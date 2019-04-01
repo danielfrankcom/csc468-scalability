@@ -174,8 +174,8 @@
                       <input type="stock-name" class="form-control" id="buy-stock" placeholder="Stock Name">
                     </div>
                     <div class="form-group">
-                      <label for="buy-quantity">Quantity</label>
-                      <input type="stock-quantity" class="form-control" id="buy-quantity" placeholder="Quantity">
+                      <label for="buy-dollar-amount">Dollar Amount</label>
+                      <input type="stock-quantity" class="form-control" id="buy-dollar-amount" placeholder="Dollar Amount">
                     </div>
                     <button type="submit" onclick="buy()" class="btn btn-primary">Submit</button>
                   </form>
@@ -213,8 +213,8 @@
                           <input type="stock-name" class="form-control" id="sell-stock" placeholder="Stock Symbol">
                       </div>
                       <div class="form-group">
-                          <label for="sell-quantity">Quantity</label>
-                          <input type="stock-quantity" class="form-control" id="sell-quantity" placeholder="Quantity">
+                          <label for="sell-dollar-amount">Dollar Amount</label>
+                          <input type="stock-quantity" class="form-control" id="sell-dollar-amount" placeholder="Dollar Amount">
                       </div>
                       <button type="submit" onclick="sell()" class="btn btn-primary">Submit</button>
                   </form>
@@ -490,63 +490,63 @@
 </html>
 <script>
     function buy(){
-        var username = sessionStorage.getItem('username');
-        var stock_name = document.getElementById("buy-stock").value;
-        var stock_quantity = document.getElementById("buy-quantity").value;
-        var command = "";
-        if(check_stock_name(stock_name) && check_stock_quantity(stock_quantity)){
-            command = command.concat("BUY,", username, "," ,stock_name, "," ,stock_quantity);
-            alert(command);
-        }
+      var username = sessionStorage.getItem('username');
+      var stock_name = document.getElementById("buy-stock").value;
+      var dollar_amount = document.getElementById("buy-dollar-amount").value;
+      var command = "";
+      if(check_stock_name(stock_name) && check_dollar_amount(dollar_amount)){
+        command = command.concat("BUY,", username, "," ,stock_name.toUpperCase(), "," , convert_to_dollar_amount(dollar_amount));
+        post_command(username, command);
+      }
     }
 
     function commit_buy(){
-        var username = sessionStorage.getItem('username');
-        var command = "";
-        command = command.concat("COMMIT_BUY,", username);
-        alert(command);
+      var username = sessionStorage.getItem('username');
+      var command = "";
+      command = command.concat("COMMIT_BUY,", username);
+      post_command(username, command);   
     }
 
     function cancel_buy(){
         var username = sessionStorage.getItem('username');
         var command = "";
         command = command.concat("CANCEL_BUY,", username);
-        alert(command);
+        post_command(username, command);
     }
 
     function sell(){
-        var username = sessionStorage.getItem('username');
-        var stock_name = document.getElementById("sell-stock").value;
-        var stock_quantity = document.getElementById("sell-quantity").value;
-        var command = "";
-        if(check_stock_name(stock_name) && check_stock_quantity(stock_quantity)){
-            command = command.concat("SELL,", username, "," ,stock_name, "," ,stock_quantity);
-            alert(command);
-        }
+      var username = sessionStorage.getItem('username');
+      var stock_name = document.getElementById("sell-stock").value;
+      var dollar_amount = document.getElementById("sell-dollar-amount").value;
+      var command = "";
+      if(check_stock_name(stock_name) && check_dollar_amount(dollar_amount)){
+        command = command.concat("SELL,", username, "," ,stock_name.toUpperCase(), "," ,convert_to_dollar_amount(dollar_amount));
+        post_command(username, command);
+      }
     }
 
     function commit_sell(){
         var username = sessionStorage.getItem('username');
         var command = "";
         command = command.concat("COMMIT_SELL,", username);
-        alert(command);
+        post_command(username, command);
     }
 
     function cancel_sell(){
         var username = sessionStorage.getItem('username');
         var command = "";
         command = command.concat("CANCEL_SELL,", username);
-        alert(command);
+        post_command(username, command);   
     }
 
     function quote(){
-        var username = sessionStorage.getItem('username');
-        var stock_name = document.getElementById("quote-stock").value;
-        var command = "";
-        if(check_stock_name(stock_name)){
-            command = command.concat("QUOTE,", username, "," ,stock_name);
-            alert(command);
-        }
+      var username = sessionStorage.getItem('username');
+      var stock_name = document.getElementById("quote-stock").value;
+      var command = "";
+      if(check_stock_name(stock_name)){
+        command = command.concat("QUOTE,", username, "," ,stock_name.toUpperCase());
+        post_command(username, command);      
+      }
     }
 
     function add(){
@@ -554,20 +554,8 @@
       var dollar_amount = document.getElementById("add-dollar-amount").value;
       var command = "";
       if(check_dollar_amount(dollar_amount)){
-        command = command.concat("ADD,", username, "," , dollar_amount);
-        payload = {
-          "username": username,
-          "command": command
-        }
-        $.post('transaction-server:5000/api',payload,(data,status)=>{
-              // handle the data (update the html)
-              if(data.errors){
-                window.alert("Errrrror");
-              } else {
-                window.alert("It worked");
-              }
-              window.location.replace("index.html");
-            });
+        command = command.concat("ADD,", username, "," , convert_to_dollar_amount(dollar_amount));
+        post_command(username, command);
       }
     }
 
@@ -577,8 +565,8 @@
       var dollar_amount = document.getElementById("buy-trigger-dollar-amount").value;
       var command = "";
       if(check_stock_name(stock_name) && check_dollar_amount(dollar_amount)){
-        command = command.concat("SET_BUY_TRIGGER,", username, ",", stock_name, "," , dollar_amount);
-        alert(command);
+        command = command.concat("SET_BUY_TRIGGER,", username, ",", stock_name, "," , convert_to_dollar_amount(dollar_amount));
+        post_command(username, command);
       }
     }
 
@@ -588,8 +576,8 @@
       var dollar_amount = document.getElementById("set-buy-dollar-amount").value;
       var command = "";
       if(check_stock_name(stock_name) && check_dollar_amount(dollar_amount)){
-        command = command.concat("SET_BUY_AMOUNT,", username, ",", stock_name, "," , dollar_amount);
-        alert(command);
+        command = command.concat("SET_BUY_AMOUNT,", username, ",", stock_name, "," , convert_to_dollar_amount(dollar_amount));
+        post_command(username, command);
       }
     }
 
@@ -599,7 +587,7 @@
       var command = "";
       if(check_stock_name(stock_name)){
         command = command.concat("CANCEL_SET_BUY,", username, ",", stock_name);
-        alert(command);
+        post_command(username, command);
       }
     }
 
@@ -609,8 +597,8 @@
       var dollar_amount = document.getElementById("sell-trigger-dollar-amount").value;
       var command = "";
       if(check_stock_name(stock_name) && check_dollar_amount(dollar_amount)){
-        command = command.concat("SET_SELL_TRIGGER,", username, ",", stock_name, "," , dollar_amount);
-        alert(command);
+        command = command.concat("SET_SELL_TRIGGER,", username, ",", stock_name, "," , convert_to_dollar_amount(dollar_amount));
+        post_command(username, command);
       }
     }
 
@@ -620,8 +608,8 @@
       var dollar_amount = document.getElementById("set-sell-dollar-amount").value;
       var command = "";
       if(check_stock_name(stock_name) && check_dollar_amount(dollar_amount)){
-        command = command.concat("SET_SELL_AMOUNT,", username, ",", stock_name, "," , dollar_amount);
-        alert(command);
+        command = command.concat("SET_SELL_AMOUNT,", username, ",", stock_name, "," , convert_to_dollar_amount(dollar_amount));
+        post_command(username, command);
       }
     }
 
@@ -631,7 +619,7 @@
       var command = "";
       if(check_stock_name(stock_name)){
         command = command.concat("CANCEL_SET_SELL,", username, ",", stock_name);
-        alert(command);
+        post_command(username, command);
       }
     }
 
@@ -639,7 +627,7 @@
       var username = sessionStorage.getItem('username');
       var command = "";
       command = command.concat("DUMPLOG,", username, ",userLOG");
-      alert(command);
+      post_command(username, command);
     }
 
     // Check if stock_symbol is 1-3 characters, and only contains letters.
@@ -674,5 +662,18 @@
         }
     }
 
+    function post_command(username, command){
+      payload = {
+          "username": username,
+          "command": command
+        }
+        $.post('/api',JSON.stringify(payload),()=>{
+            // check for errors in here and print them if there are any
+        })  
+    }
+
+    function convert_to_dollar_amount(amount){
+      return parseFloat(Math.round(amount * Math.pow(10, 2)) /Math.pow(10,2)).toFixed(2);
+    }
 
 </script>
