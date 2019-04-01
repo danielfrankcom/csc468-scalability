@@ -229,18 +229,19 @@ async def root():
 transaction_num = 0
 
 @app.route('/api', methods=['POST'])
-def api():
+async def api():
     global transaction_num
     transaction_num+=1
     
-    body = request.data
-    payload = json.loads(body)
+    body = await request.data
+    logger.info("Request received with body %s.", body.decode())
+    payload = json.loads(body.decode())
     username = payload["username"]
     transaction = f"[{transaction_num}] {payload['command']}"
     
 
     # Queue up the transaction for processing by an async worker.
-    result = processor.register_transaction(transaction)
+    result = await processor.register_transaction(transaction)
     
     # get stuff from database
     newBalance = None
