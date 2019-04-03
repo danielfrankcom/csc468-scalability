@@ -136,7 +136,9 @@ class Processor:
 
         # Set up the processing function for running asynchronously.
         work = lambda settings: function(*groups, **settings)
+        commands.start_sleep()
         await queue.put((work, transaction))
+        commands.start_work()
         logger.debug("Transaction %s added to queue.", transaction)
 
         return True
@@ -181,7 +183,9 @@ class Processor:
         # dealing with, this won't be an issue.
 
         while True:
+            commands.start_sleep()
             work_item, transaction = await queue.get()
+            commands.start_work()
             logger.info("Work retreived for transaction %s.", transaction)
 
             async with self.pool.acquire() as conn:
@@ -191,7 +195,9 @@ class Processor:
                 }
 
                 try:
+                    commands.start_sleep()
                     await work_item(arguments)
+                    commands.start_work()
                     logger.info("Work item completed for transaction %s.", transaction)
                 except:
                     # We log the error (in xml) and continue to limp along, hoping the
@@ -213,12 +219,16 @@ app = Quart(__name__)
 @app.route('/', methods=['POST'])
 async def root():
 
+    commands.start_sleep()
     body = await request.data
+    commands.start_work()
     transaction = body.decode()
     logger.info("Request received with body %s.", transaction)
 
     # Queue up the transaction for processing by an async worker.
+    commands.start_sleep()
     result = await processor.register_transaction(transaction, loop)
+    commands.start_work()
     logger.info("Request stored with result %s.", result)
 
     response = jsonify(success=True)

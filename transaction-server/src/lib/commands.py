@@ -10,6 +10,28 @@ import os
 
 QUOTE_LIFESPAN = 60 # Time a quote is valid for (60 in production).
 
+prev_time = datetime.now()
+zero_time = prev_time - prev_time
+idle_time = zero_time
+up_time = zero_time
+
+def start_sleep():
+    global prev_time
+    global up_time
+    cur_time = datetime.now()
+    diff = cur_time - prev_time
+    up_time = up_time + diff
+    prev_time = cur_time
+
+def start_work():
+    global prev_time
+    global idle_time
+    cur_time = datetime.now()
+    diff = cur_time - prev_time
+    idle_time = idle_time + diff
+    prev_time = cur_time
+
+
 #QUOTE_CACHE_HOST = "192.168.1.249"
 #QUOTE_CACHE_PORT = 6000
 QUOTE_CACHE_HOST = "quoteserve.seng.uvic.ca"
@@ -51,7 +73,9 @@ async def reservation_timeout_handler(pool):
     """Helper function - used to cancel buy/sell orders after they timeout."""
 
     # Block until the first expiry time is available.
+    start_sleep()
     expiry_time = await reservation_timestamp_queue.get()
+    start_work()
     logging.debug("Expiry time %s retreived", expiry_time)
 
     while True:
@@ -61,7 +85,9 @@ async def reservation_timeout_handler(pool):
 
         # If this is <= 0 then the method will return right away.
         logging.debug("Sleeping for %s", sleep_time)
+        start_sleep()
         await asyncio.sleep(sleep_time)
+        start_work()
         logging.debug("Done sleeping for %s", sleep_time)
 
         # Loops until all currently expired transactions have been dealt with.
@@ -75,7 +101,9 @@ async def reservation_timeout_handler(pool):
                                             "RETURNING *;               " 
 
                         target_timestamp = round(time.time(), 5)
+                        start_sleep()
                         reservation = await conn.fetchrow(delete_reserved, target_timestamp)
+                        start_work()
 
                         # There are no more expired reservations
                         if not reservation:
@@ -90,7 +118,9 @@ async def reservation_timeout_handler(pool):
                             users_update =  "UPDATE users " \
                                             "SET balance = balance + $1 " \
                                             "WHERE username = $2;"
+                            start_sleep()
                             await conn.execute(users_update, reservation["amount"], reservation["username"])
+                            start_work()
 
                         else:
 
@@ -98,8 +128,10 @@ async def reservation_timeout_handler(pool):
                                             "SET stock_quantity = stock_quantity + $1 " \
                                             "WHERE username = $2 " \
                                             "AND stock_symbol = $3;"
+                            start_sleep()
                             await conn.execute(stocks_update, reservation["stock_quantity"],
                                     reservation["username"], reservation["stock_symbol"])
+                            start_work()
             except:
                 logger.exception("Buy/sell timeout task failed to commit.")
 
@@ -109,7 +141,9 @@ async def reservation_timeout_handler(pool):
 
         expired = True
         while expired:
+            start_sleep()
             expiry_time = await reservation_timestamp_queue.get()
+            start_work()
             now = round(loop.time())
             expired = expiry_time <= now 
             logging.debug("Expired=%s based on now:%s, expiry:%s", expired, now, expiry_time)
@@ -131,15 +165,21 @@ async def get_quote(user_id, stock_symbol):
                     with sock:
                         #sock.setblocking(False)
 
-                        sock.bind((host, 0))
+#                        sock.bind((host, 0))
+                        start_sleep()
                         await loop.sock_connect(sock, (QUOTE_CACHE_HOST, QUOTE_CACHE_PORT))
+                        start_work()
                         #await loop.sock_connect(sock, (QUOTE_CACHE_HOST, QUOTE_CACHE_PORT))
 
                         #reader, writer = await asyncio.open_connection(QUOTE_CACHE_HOST, QUOTE_CACHE_PORT, sock=sock, loop=loop)
                     #reader, writer = await asyncio.open_connection(QUOTE_CACHE_HOST, QUOTE_CACHE_PORT, local_addr=("127.0.0.1", 1245), loop=loop)
 
+                        start_sleep()
                         await loop.sock_sendall(sock, encoded)
+                        start_work()
+                        start_sleep()
                         raw = await loop.sock_recv(sock, 1024)
+                        start_work()
 
 
                         #writer.write(encoded)
@@ -179,7 +219,9 @@ async def quote(transaction_num, user_id, stock_symbol, **settings):
     xml_tree = settings["xml_tree"]
 
     # get quote from server/cache
+    start_sleep()
     new_price, time_of_quote, cryptokey, quote_user = await get_quote(user_id, stock_symbol)
+    start_work()
 
     quote = QuoteServer()
     attributes = {
@@ -220,7 +262,9 @@ async def add(transaction_num, user_id, amount, **settings):
 
     logger.info("Executing add command for transaction %s", transaction_num)
     async with conn.transaction():
+        start_sleep()
         await conn.execute(query, user_id, float(amount))
+        start_work()
         logger.debug("Balance update for %s sucessful.", transaction_num)
         
     transaction = AccountTransaction()
@@ -250,7 +294,9 @@ async def _get_latest_reserved(transaction_type, user_id, conn):
                 "AND timestamp > $3;"
 
     target_timestamp = round(loop.time()) # Current time is threshold for expiry.
+    start_sleep()
     return await conn.fetchrow(selection, transaction_type, user_id, target_timestamp)
+start_work()
 
 async def buy(transaction_num, user_id, stock_symbol, amount, **settings):
     xml_tree = settings["xml_tree"]
@@ -269,7 +315,9 @@ async def buy(transaction_num, user_id, stock_symbol, amount, **settings):
     command.updateAll(**attributes)
     xml_tree.append(command)
     
+    start_sleep()
     price, stock_symbol, user_id, time_of_quote, cryptokey = await quote(transaction_num, user_id, stock_symbol, **settings)
+    start_work()
 
     stock_quantity = int(float(amount) / price)
     if stock_quantity <= 0:
@@ -301,7 +349,9 @@ async def buy(transaction_num, user_id, stock_symbol, amount, **settings):
                         "WHERE username = $1 " \
                         "AND balance >= $2;"
 
+        start_sleep()
         result = await conn.fetchrow(balance_check, user_id, purchase_price)
+        start_work()
 
         if not result:
             error = ErrorEvent()
@@ -327,7 +377,9 @@ async def buy(transaction_num, user_id, stock_symbol, amount, **settings):
                             "WHERE username = $2;"
 
         # Only reserve the exact amount needed to buy the stock
+        start_sleep()
         await conn.execute(balance_update, purchase_price, user_id)
+        start_work()
         logger.debug("Balance update for %s sucessful.", transaction_num)
 
         # It is possible that we have an identical reservation already, however we add this
@@ -338,12 +390,16 @@ async def buy(transaction_num, user_id, stock_symbol, amount, **settings):
                             "('buy', $1, $2, $3, $4, $5, $6);"
 
         timestamp = round(loop.time()) + QUOTE_LIFESPAN # Expiry time.
+        start_sleep()
         await conn.execute(reserved_update, user_id, stock_symbol,
                 stock_quantity, price, purchase_price, timestamp)
+        start_work()
         logger.debug("Reserved update for %s sucessful.", transaction_num)
 
         # Mark for expiry in QUOTE_LIFESPAN seconds.
+        start_sleep()
         await reservation_timestamp_queue.put(timestamp)
+        start_work()
 
     transaction = AccountTransaction()
     attributes = {
@@ -374,7 +430,9 @@ async def commit_buy(transaction_num, user_id, **settings):
     
     async with conn.transaction():
 
+        start_sleep()
         selected = await _get_latest_reserved("buy", user_id, conn)
+        start_work()
         if not selected:
             error = ErrorEvent()
             attributes = {
@@ -398,12 +456,16 @@ async def commit_buy(transaction_num, user_id, **settings):
                         "WHERE stocks.username = $1 " \
                         "AND stocks.stock_symbol = $2;"
         
+        start_sleep()
         await conn.execute(stocks_update, user_id, selected["stock_symbol"], selected["stock_quantity"])
+        start_work()
         
         reservation_delete =    "DELETE FROM reserved " \
                                 "WHERE reservationid = $1;"
 
+        start_sleep()
         await conn.execute(reservation_delete, selected["reservationid"])
+        start_work()
 
 async def cancel_buy(transaction_num, user_id, **settings):
     xml_tree = settings["xml_tree"]
@@ -422,7 +484,9 @@ async def cancel_buy(transaction_num, user_id, **settings):
 
     async with conn.transaction():
 
+        start_sleep()
         selected = await _get_latest_reserved("buy", user_id, conn)
+        start_work()
         if not selected:
             error = ErrorEvent()
             attributes = {
@@ -443,12 +507,16 @@ async def cancel_buy(transaction_num, user_id, **settings):
                             "SET balance = balance + $1 " \
                             "WHERE username = $2;"
 
+        start_sleep()
         await conn.execute(update_balance, selected["amount"], user_id)
+        start_work()
 
         delete_reserved =   "DELETE FROM reserved " \
                             "WHERE reservationid = $1;"
 
+        start_sleep()
         await conn.execute(delete_reserved, selected["reservationid"])
+        start_work()
 
     transaction = AccountTransaction()
     attributes = {
@@ -479,7 +547,9 @@ async def sell(transaction_num, user_id, stock_symbol, amount, **settings):
     command.updateAll(**attributes)
     xml_tree.append(command)
 
+    start_sleep()
     price, stock_symbol, user_id, time_of_quote, cryptokey = await quote(transaction_num, user_id, stock_symbol, **settings)
+    start_work()
 
     sell_quantity = int(float(amount) / price)
     if sell_quantity <= 0:
@@ -509,7 +579,9 @@ async def sell(transaction_num, user_id, stock_symbol, amount, **settings):
                         "AND stock_symbol = $2 " \
                         "AND stock_quantity >= $3;"
 
+        start_sleep()
         result = await conn.fetchrow(stock_check, user_id, stock_symbol, sell_quantity)
+        start_work()
 
         if not result:
             error = ErrorEvent()
@@ -535,7 +607,9 @@ async def sell(transaction_num, user_id, stock_symbol, amount, **settings):
                         "WHERE username = $2 " \
                         "AND stock_symbol = $3;"
 
+        start_sleep()
         await conn.execute(stocks_update, sell_quantity, user_id, stock_symbol)
+        start_work()
 
         reserved_update =   "INSERT INTO reserved " \
                             "(type, username, stock_symbol, stock_quantity, price, amount, timestamp) " \
@@ -543,11 +617,15 @@ async def sell(transaction_num, user_id, stock_symbol, amount, **settings):
                             "('sell', $1, $2, $3, $4, $5, $6);"
                             
         timestamp = round(loop.time()) + QUOTE_LIFESPAN # Expiry time.
+        start_sleep()
         await conn.execute(reserved_update, user_id, stock_symbol,
                 sell_quantity, price, sell_price, timestamp)
+        start_work()
 
         # Mark for expiry in QUOTE_LIFESPAN seconds.
+        start_sleep()
         await reservation_timestamp_queue.put(timestamp)
+        start_work()
 
 async def commit_sell(transaction_num, user_id, **settings):
     xml_tree = settings["xml_tree"]
@@ -566,7 +644,9 @@ async def commit_sell(transaction_num, user_id, **settings):
 
     async with conn.transaction():
 
+        start_sleep()
         selected = await _get_latest_reserved("sell", user_id, conn)
+        start_work()
         if not selected:
             error = ErrorEvent()
             attributes = {
@@ -587,12 +667,16 @@ async def commit_sell(transaction_num, user_id, **settings):
                         "SET balance = balance + $1 " \
                         "WHERE username = $2;"
 
+        start_sleep()
         await conn.execute(users_update, selected["amount"], user_id)
+        start_work()
 
         delete_reserved =   "DELETE FROM reserved " \
                             "WHERE reservationid = $1;"
 
+        start_sleep()
         await conn.execute(delete_reserved, selected["reservationid"])
+        start_work()
 
     transaction = AccountTransaction()
     attributes = {
@@ -623,7 +707,9 @@ async def cancel_sell(transaction_num, user_id, **settings):
 
     async with conn.transaction():
 
+        start_sleep()
         selected = await _get_latest_reserved("sell", user_id, conn)
+        start_work()
         if not selected:
             error = ErrorEvent()
             attributes = {
@@ -645,12 +731,16 @@ async def cancel_sell(transaction_num, user_id, **settings):
                         "WHERE username = $2 " \
                         "AND stock_symbol = $3;"
 
+        start_sleep()
         await conn.execute(stocks_update, selected["stock_quantity"], user_id, selected["stock_symbol"])
+        start_work()
 
         reservation_delete =    "DELETE FROM reserved " \
                                 "WHERE reservationid = $1;"
 
+        start_sleep()
         await conn.execute(reservation_delete, selected["reservationid"])
+        start_work()
 
 # set_buy_amount allows a user to set a dollar amount of stock to buy.  This must be followed
 # by set_buy_trigger() before the trigger goes 'live'. 
@@ -680,7 +770,9 @@ async def set_buy_amount(transaction_num, user_id, stock_symbol, amount, **setti
                        "AND type = 'buy';          "
 
         # Does SET_BUY order exist for this user/stock combo?
+        start_sleep()
         existing = await conn.fetchval(get_existing, user_id, stock_symbol)
+        start_work()
 
         if existing:
             difference = float(amount) - existing
@@ -692,7 +784,9 @@ async def set_buy_amount(transaction_num, user_id, stock_symbol, amount, **setti
                         "FROM users             " \
                         "WHERE username = $1;   " \
 
+        start_sleep()
         balance = await conn.fetchval(balance_check, user_id)
+        start_work()
 
         if not balance or balance < difference:
             error = ErrorEvent()
@@ -715,7 +809,9 @@ async def set_buy_amount(transaction_num, user_id, stock_symbol, amount, **setti
                         "WHERE username = $2        "
 
         # Adjust member's account balance.
+        start_sleep()
         await conn.execute(users_update, difference, user_id)
+        start_work()
 
         # If the order existed already, update it with the new BUY_AMOUNT, else create new record.
         triggers_update =   "INSERT INTO triggers                                                   " \
@@ -726,7 +822,9 @@ async def set_buy_amount(transaction_num, user_id, stock_symbol, amount, **setti
                             "transaction_amount = $3,                                               " \
                             "transaction_number = $4;                                               "
 
+        start_sleep()
         await conn.execute(triggers_update, user_id, stock_symbol, float(amount), int(transaction_num))
+        start_work()
 
     transaction = AccountTransaction()
     attributes = {
@@ -771,7 +869,9 @@ async def cancel_set_buy(transaction_num, user_id, stock_symbol, **settings):
                        "AND type = 'buy';          "
 
         # Does SET_BUY order exist for this user/stock combo?
+        start_sleep()
         refund_amount = await conn.fetchval(get_existing, user_id, stock_symbol)
+        start_work()
 
         if not refund_amount:
             error = ErrorEvent()
@@ -796,14 +896,18 @@ async def cancel_set_buy(transaction_num, user_id, stock_symbol, **settings):
                         "SET balance = balance + $1 " \
                         "WHERE username = $2        "
 
+        start_sleep()
         await conn.execute(users_update, refund_amount, user_id)
+        start_work()
 
         triggers_delete =   "DELETE FROM triggers   " \
                             "WHERE username = $1    " \
                             "AND stock_symbol = $2  " \
                             "AND type = 'buy';      "
 
+        start_sleep()
         await conn.execute(triggers_delete, user_id, stock_symbol)
+        start_work()
 
     transaction = AccountTransaction()
     attributes = {
@@ -843,7 +947,9 @@ async def set_buy_trigger(transaction_num, user_id, stock_symbol, amount, **sett
                        "AND type = 'buy';          "
 
         # Does SET_BUY order exist for this user/stock combo?
+        start_sleep()
         existing = await conn.fetchval(get_existing, user_id, stock_symbol)
+        start_work()
 
         if not existing:
             error = ErrorEvent()
@@ -869,7 +975,9 @@ async def set_buy_trigger(transaction_num, user_id, stock_symbol, amount, **sett
                             "AND stock_symbol = $4       " \
                             "AND type = 'buy';           "
 
+        start_sleep()
         await conn.execute(triggers_update, float(amount), int(transaction_num), user_id, stock_symbol)
+        start_work()
 
 async def set_sell_amount(transaction_num, user_id, stock_symbol, requested_transaction, **settings):
     xml_tree = settings["xml_tree"]
@@ -894,7 +1002,9 @@ async def set_sell_amount(transaction_num, user_id, stock_symbol, requested_tran
                         "FROM users  " \
                         "WHERE username = $1; "
 
+        start_sleep()
         exists = await conn.fetchval(user_check, user_id)
+        start_work()
         if not exists:
             error = ErrorEvent()
             attributes = {
@@ -916,7 +1026,9 @@ async def set_sell_amount(transaction_num, user_id, stock_symbol, requested_tran
                         "AND stock_symbol = $2                      " \
                         "AND type = 'sell';                         "
 
+        start_sleep()
         existing = await conn.fetchrow(get_existing, user_id, stock_symbol)
+        start_work()
 
         if existing:
 
@@ -946,7 +1058,9 @@ async def set_sell_amount(transaction_num, user_id, stock_symbol, requested_tran
                                         "WHERE username = $1   " \
                                         "AND stock_symbol = $2;"
 
+                start_sleep()
                 stock_owned = await conn.fetchval(get_stock_quantity, user_id, stock_symbol)
+                start_work()
 
                 # Difference may be negative, however this check will still pass.
                 if not stock_owned or stock_owned < difference:
@@ -971,7 +1085,9 @@ async def set_sell_amount(transaction_num, user_id, stock_symbol, requested_tran
                                 "WHERE username = $2                      " \
                                 "AND stock_symbol = $3                    "
 
+                start_sleep()
                 await conn.execute(stocks_update, difference, user_id, stock_symbol)
+                start_work()
 
             triggers_update =   "UPDATE triggers            " \
                                 "SET                        " \
@@ -981,8 +1097,10 @@ async def set_sell_amount(transaction_num, user_id, stock_symbol, requested_tran
                                 "AND stock_symbol = $4      " \
                                 "AND type = 'sell'          " \
 
+            start_sleep()
             await conn.execute(triggers_update, float(requested_transaction),
                     int(transaction_num), user_id, stock_symbol)
+            start_work()
 
         else:
 
@@ -990,8 +1108,10 @@ async def set_sell_amount(transaction_num, user_id, stock_symbol, requested_tran
                                 "(username, stock_symbol, type, transaction_amount, transaction_number) " \
                                 "VALUES ($1, $2, 'sell', $3, $4)                                        " \
 
+            start_sleep()
             await conn.execute(triggers_update, user_id, stock_symbol,
                     float(requested_transaction), int(transaction_num))
+            start_work()
 
 async def cancel_set_sell(transaction_num, user_id, stock_symbol, **settings):
     xml_tree = settings["xml_tree"]
@@ -1018,7 +1138,9 @@ async def cancel_set_sell(transaction_num, user_id, stock_symbol, **settings):
                        "AND type = 'sell';                          "
 
         # Does SET_SELL order exist for this user/stock combo?
+        start_sleep()
         existing = await conn.fetchrow(get_existing, user_id, stock_symbol)
+        start_work()
 
         if not existing:
             error = ErrorEvent()
@@ -1052,14 +1174,18 @@ async def cancel_set_sell(transaction_num, user_id, stock_symbol, **settings):
                             "WHERE username = $2                        " \
                             "AND stock_symbol = $3;                     "
 
+            start_sleep()
             await conn.execute(stocks_update, refund_amount, user_id, stock_symbol)
+            start_work()
 
         triggers_delete =   "DELETE FROM triggers   " \
                             "WHERE username = $1    " \
                             "AND stock_symbol = $2  " \
                             "AND type = 'sell';      "
 
+        start_sleep()
         await conn.execute(triggers_delete, user_id, stock_symbol)
+        start_work()
 
 async def set_sell_trigger(transaction_num, user_id, stock_symbol, requested_trigger, **settings):
     xml_tree = settings["xml_tree"]
@@ -1087,7 +1213,9 @@ async def set_sell_trigger(transaction_num, user_id, stock_symbol, requested_tri
                         "AND type = 'sell';                         "
 
         # Does SET_SELL order exist for this user/stock combo?
+        start_sleep()
         existing = await conn.fetchrow(get_existing, user_id, stock_symbol)
+        start_work()
 
         if not existing:
             error = ErrorEvent()
@@ -1129,7 +1257,9 @@ async def set_sell_trigger(transaction_num, user_id, stock_symbol, requested_tri
                                 "WHERE username = $1   " \
                                 "AND stock_symbol = $2;"
 
+        start_sleep()
         stock_owned = await conn.fetchval(get_stock_quantity, user_id, stock_symbol)
+        start_work()
 
         # Difference may be negative, however this check will still pass.
         if not stock_owned or stock_owned < difference:
@@ -1154,7 +1284,9 @@ async def set_sell_trigger(transaction_num, user_id, stock_symbol, requested_tri
                         " WHERE username = $2                      " \
                         " AND stock_symbol = $3                    "
 
+        start_sleep()
         await conn.execute(stocks_update, difference, user_id, stock_symbol)
+        start_work()
 
 
         triggers_update =   " UPDATE triggers                           " \
@@ -1164,7 +1296,9 @@ async def set_sell_trigger(transaction_num, user_id, stock_symbol, requested_tri
                             " AND stock_symbol = $4                     " \
                             " AND type = 'sell';                        "
 
+        start_sleep()
         await conn.execute(triggers_update, float(requested_trigger), int(transaction_num), user_id, stock_symbol)
+        start_work()
 
 async def _process_trigger(record, pool, xml_tree):
 
@@ -1176,14 +1310,18 @@ async def _process_trigger(record, pool, xml_tree):
             trigger_check = "SELECT transaction_number FROM triggers " \
                             "WHERE transaction_number = $1;          "
 
+            start_sleep()
             exists = await conn.fetchval(trigger_check, record["transaction_number"])
+            start_work()
             if not exists:
                 # Transaction has been cancelled,
                 # silently exit.
                 return
 
             settings = {"xml_tree": xml_tree}
+            start_sleep()
             results = await quote(record["transaction_number"], record["username"], record["stock_symbol"], **settings)
+            start_work()
             price = results[0]
 
             trigger_amount = record["trigger_amount"]
@@ -1200,7 +1338,9 @@ async def _process_trigger(record, pool, xml_tree):
                                 "AND stocks.stock_symbol = $2;"
 
                 stock_quantity = int(transaction_amount / price)
+                start_sleep()
                 await conn.execute(stocks_update, record["username"], record["stock_symbol"], stock_quantity)
+                start_work()
 
                 balance_addition = transaction_amount - (price * stock_quantity)
 
@@ -1219,14 +1359,18 @@ async def _process_trigger(record, pool, xml_tree):
                             "SET balance = balance + $1 " \
                             "WHERE username = $2;       "
 
+            start_sleep()
             await conn.execute(users_update, balance_addition, record["username"])
+            start_work()
 
             triggers_update =   "DELETE FROM triggers   " \
                                 "WHERE username = $1    " \
                                 "AND stock_symbol = $2  " \
                                 "AND type = $3;         "
 
+            start_sleep()
             await conn.execute(triggers_update, record["username"], record["stock_symbol"], record["type"])
+            start_work()
 
     transaction = AccountTransaction()
     attributes = {
@@ -1243,6 +1387,10 @@ async def _process_trigger(record, pool, xml_tree):
 async def trigger_maintainer(pool, xml_tree):
 
     while True:
+        print("Current performance stats",
+                "\nUp time:", up_time,
+                "\nIdle time:", idle_time)
+
         start_time = round(loop.time())
 
         async with pool.acquire() as conn:
@@ -1251,7 +1399,9 @@ async def trigger_maintainer(pool, xml_tree):
                 get_triggers =  "SELECT * FROM triggers             " \
                                 "WHERE trigger_amount IS NOT NULL;  "
 
+                start_sleep()
                 triggers = await conn.fetch(get_triggers)
+                start_work()
 
         # The list of triggers is no longer in a transaction, so we must be careful
         # how we deal with them. Within each async task, we will check whether or
@@ -1260,14 +1410,18 @@ async def trigger_maintainer(pool, xml_tree):
         logging.info("Trigger maintainer: %s triggers found to check.", len(triggers))
 
         tasks = [_process_trigger(record, pool, xml_tree) for record in triggers]
+        start_sleep()
         await asyncio.gather(*tasks)
+        start_work()
 
         logging.debug("Finished processing triggers")
         
         now = round(loop.time())
         sleep_time = QUOTE_LIFESPAN - (now - start_time)
         logging.debug("Trigger maintainer sleeping for %s seconds.", sleep_time)
+        start_sleep()
         await asyncio.sleep(sleep_time)
+        start_work()
         logging.debug("Trigger maintainer woke up")
 
 # Deprecated.
