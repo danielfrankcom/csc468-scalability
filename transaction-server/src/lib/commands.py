@@ -288,7 +288,7 @@ async def buy(transaction_num, user_id, stock_symbol, amount, **settings):
         xml_tree.append(error)
 
         logger.info("Amount insufficient to purchase at least 1 stock for %s.", transaction_num)
-        return
+        return "Amount insufficient to purchase at least 1 stock"
 
     assert stock_quantity > 0
     purchase_price = float(stock_quantity * price)
@@ -319,7 +319,7 @@ async def buy(transaction_num, user_id, stock_symbol, amount, **settings):
             xml_tree.append(error)
 
             logger.info("Funds insufficient to purchase requested stock for %s", transaction_num)
-            return
+            return "Funds insufficient to purchase requested stock."
 
 
         balance_update =    "UPDATE users " \
@@ -389,7 +389,7 @@ async def commit_buy(transaction_num, user_id, **settings):
             xml_tree.append(error)
 
             logger.info("No buy to commit for %s", transaction_num)
-            return
+            return "No BUY to commit" 
 
         stocks_update = "INSERT INTO stocks (username, stock_symbol, stock_quantity) " \
                         "VALUES ($1, $2, $3) " \
@@ -437,7 +437,7 @@ async def cancel_buy(transaction_num, user_id, **settings):
             xml_tree.append(error)
 
             logger.info("No buy to cancel for %s", transaction_num)
-            return
+            return "No BUY to cancel" 
 
         update_balance =    "UPDATE users " \
                             "SET balance = balance + $1 " \
@@ -498,7 +498,7 @@ async def sell(transaction_num, user_id, stock_symbol, amount, **settings):
         xml_tree.append(error)
 
         logger.info("Amount insufficient to sell at least 1 stock for %s.", transaction_num)
-        return
+        return "Amount insufficient to sell at least 1 stock"
 
     assert sell_quantity > 0
 
@@ -526,7 +526,7 @@ async def sell(transaction_num, user_id, stock_symbol, amount, **settings):
             xml_tree.append(error)
 
             logger.info("Funds insufficient to purchase requested stock for %s", transaction_num)
-            return
+            return "Stock quantity insufficient to sell requested stock."
 
         sell_price = float(sell_quantity * price)
 
@@ -581,7 +581,7 @@ async def commit_sell(transaction_num, user_id, **settings):
             xml_tree.append(error)
 
             logger.info("No sell to commit for %s", transaction_num)
-            return
+            return "No SELL to commit" 
 
         users_update =  "UPDATE users " \
                         "SET balance = balance + $1 " \
@@ -638,7 +638,7 @@ async def cancel_sell(transaction_num, user_id, **settings):
             xml_tree.append(error)
 
             logger.info("No sell to cancel for %s", transaction_num)
-            return
+            return "No SELL to cancel" 
 
         stocks_update = "UPDATE stocks " \
                         "SET stock_quantity = stock_quantity + $1 " \
@@ -706,7 +706,7 @@ async def set_buy_amount(transaction_num, user_id, stock_symbol, amount, **setti
             }
             error.updateAll(**attributes)
             xml_tree.append(error)
-            return
+            return "Insufficient Funds" 
 
         logger.debug("Balance of %s: %.02f is sufficient for %s", user_id, balance, transaction_num)
 
@@ -787,7 +787,7 @@ async def cancel_set_buy(transaction_num, user_id, stock_symbol, **settings):
             xml_tree.append(error)
 
             logger.info("SET_BUY does not exist, no action taken")
-            return
+            return "SET_BUY does not exist, no action taken"
 
         logger.info("SET_BUY found, cancelling")
         logger.debug("Refund amount for %s: %.02f", transaction_num, refund_amount)
@@ -859,7 +859,7 @@ async def set_buy_trigger(transaction_num, user_id, stock_symbol, amount, **sett
             xml_tree.append(error)
 
             logger.info("SET_BUY does not exist, no action taken")
-            return
+            return "SET_BUY does not exist, no action taken"
 
         triggers_update =   "UPDATE triggers             " \
                             "SET                         " \
@@ -907,7 +907,7 @@ async def set_sell_amount(transaction_num, user_id, stock_symbol, requested_tran
             }
             error.updateAll(**attributes)
             xml_tree.append(error)
-            return
+            return "User for SET_SELL_AMOUNT does not exist"
 
         # If a trigger already exists, we need to recalculate the required stock.
         get_existing =  "SELECT transaction_amount, trigger_amount  " \
@@ -961,7 +961,7 @@ async def set_sell_amount(transaction_num, user_id, stock_symbol, requested_tran
                     }
                     error.updateAll(**attributes)
                     xml_tree.append(error)
-                    return
+                    return "User does not own enough shares of this type"
 
                 logger.info("User owns enough stocks for transaction %s to proceed.", transaction_num)
 
@@ -1034,7 +1034,7 @@ async def cancel_set_sell(transaction_num, user_id, stock_symbol, **settings):
             xml_tree.append(error)
 
             logger.info("SET_SELL does not exist, no action taken")
-            return
+            return "SET_SELL does not exist, no action taken"
 
         logger.info("SET_SELL found, cancelling")
 
@@ -1103,7 +1103,7 @@ async def set_sell_trigger(transaction_num, user_id, stock_symbol, requested_tri
             xml_tree.append(error)
 
             logger.info("SET_SELL does not exist, no action taken")
-            return
+            return "SET_SELL does not exist, no action taken"
 
         # This may be None if the trigger has not yet been set.
         current_trigger = existing["trigger_amount"]
@@ -1144,7 +1144,7 @@ async def set_sell_trigger(transaction_num, user_id, stock_symbol, requested_tri
             }
             error.updateAll(**attributes)
             xml_tree.append(error)
-            return
+            return "User does not own enough shares of this type"
 
         logger.info("User owns enough stocks for transaction %s to proceed.", transaction_num)
 
@@ -1307,3 +1307,4 @@ def display_summary(transaction_num, user_id, XMLTree):
     }
     command.updateAll(**attributes)
     XMLTree.append(command)
+
