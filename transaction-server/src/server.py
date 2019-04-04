@@ -22,6 +22,8 @@ DB_PORT = 5432
 CONN_MIN = 100
 CONN_MAX = 1000
 
+ERRORS = set()
+
 PROCESSORS = [
         (commands.quote, re.compile(r"^\[(\d+)\] QUOTE,([^ ]{10}),([A-Z]{1,3}) ?$")),
         (commands.add, re.compile(r"^\[(\d+)\] ADD,([^ ]{10}),(\d+\.\d{2}) ?$")),
@@ -193,7 +195,9 @@ class Processor:
                 }
 
                 try:
-                    await work_item(arguments)
+                    error = await work_item(arguments)
+                    if(error):
+                        ERRORS.add(error)
                     logger.info("Work item completed for transaction %s.", transaction)
                 except:
                     # We log the error (in xml) and continue to limp along, hoping the
@@ -244,7 +248,7 @@ async def api():
     result = await processor.register_transaction(transaction)
     
     # get stuff from database
-    newBalance = None
+    newBalance = 100.00
     newTriggers = None
     newStocks = None
     response = {
@@ -254,5 +258,35 @@ async def api():
         "stocks": newStocks
     }
     return jsonify(response)
+
+@app.route('/status', methods=['POST'])
+async def status():
+
+    body = await request.data
+    payload = json.loads(body.decode())
+    username = payload["username"]
+
+    errors = list(ERRORS)
+    ERRORS.clear()
+
+    async with processor.pool.acquire() as conn:
+        async with conn.transaction():
+
+            balance_check = "SELECT balance FROM users " \
+                            "WHERE username = $1;"
+
+            balance = await conn.fetchval(balance_check, username)
+
+    triggers = []
+    stocks = []
+
+    info = {
+        "errors": errors,
+        "balance": balance,
+        "triggers": triggers,
+        "stocks": stocks
+    }
+    return jsonify(info)
+
 
 app.run(host="0.0.0.0", port="5000", loop=loop)

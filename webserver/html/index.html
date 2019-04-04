@@ -50,6 +50,9 @@
       <div class="sidebar-heading">
         Balance
       </div>
+      <div>
+          <p class="sidebar-brand-text mx-3" id="balance">0.00</p>
+      </div>
 
     </ul>
     <!-- End of Sidebar -->
@@ -666,11 +669,26 @@
       payload = {
           "username": username,
           "command": command
-        }
-        $.post('/api',JSON.stringify(payload),()=>{
-            // check for errors in here and print them if there are any
-        })  
+      }
+      $.post('/api',JSON.stringify(payload)).done(function(response){
+        // alert($("#mypar").html(response[0]));
+          // check for errors in here and print them if there are any
+      })
     }
+
+    function get_info(username){
+      payload = {username}
+      $.post('/status',JSON.stringify(payload)).done(function(response){
+        document.getElementById("balance").innerHTML = JSON.stringify(response.balance);
+        if(response.error == []){
+        }else{
+          for (i = 0; i < response.error.length(); i++) {
+            alert("ERROR: ", response.error[i]);
+          }
+        }
+      })
+    }
+
 
     function convert_to_dollar_amount(amount){
       return parseFloat(Math.round(amount * Math.pow(10, 2)) /Math.pow(10,2)).toFixed(2);
