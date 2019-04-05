@@ -268,21 +268,36 @@ async def status():
 
             balance = await conn.fetchval(get_balance, username)
 
-			# todo: check this
-            get_triggers =  "SELECT * FROM triggers " \
+            trigger_check = "SELECT * FROM triggers " \
                             "WHERE username = $1;"
 
-            triggers_row = await conn.fetchall(get_triggers, username)
+            trigger_result = await conn.fetch(get_triggers, username)
 
-			# todo: not sure this conversion will work?
-			triggers = list(triggers_row)
+			triggers = []
+			if(trigger_result):
+				for row in trigger_result:
+					triggers_row = {
+						"stock_symbol": row[1],
+						"type": row[2],
+						"trigger_amount": row[3],
+						"transaction_amount": row[4]
+					}
+					triggers.append(triggers_row)
 
-			# todo: check this
-            get_stocks =    "SELECT * FROM stocks " \
+
+			stock_check =   "SELECT * FROM stocks " \
 							"WHERE username = $1;"
 
-            stocks_row = await conn.fetchall(get_stocks, username)
-			triggers = list(get_stocks)
+			stock_results = await conn.fetch(stock_check, username)
+
+			stocks = []
+			if(stock_results):
+				for row in stock_results:
+					stocks_row = {
+						"stock_symbol": row[1],
+						"quantity": row[2]
+					}
+					stocks.append(stocks_row)
 
     info = {
         "balance": balance,
