@@ -444,7 +444,7 @@
                             <!-- Card Body -->
                             <div class="card-body text-center">
                               <!-- <form class="text-center"> -->
-                                <button onclick="create_user_log()" class="btn btn-primary mt-2 mb-2">Create User Log</button>
+                                <button onclick="dumplog()" class="btn btn-primary mt-2 mb-2">Create User Log</button>
                             </form>
                             </div>
                           </div>
@@ -774,6 +774,14 @@
       })
   
     }
+
+    function dumplog(){
+      var username = sessionStorage.getItem('username');
+      var command = "";
+      command = command.concat("DUMPLOG,", username, ",./FrontEndLog");
+      post_command(username, command);
+    }
+
 
     function convert_to_dollar_amount(amount){
       return parseFloat(Math.round(amount * Math.pow(10, 2)) /Math.pow(10,2)).toFixed(2);
