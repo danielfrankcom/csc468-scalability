@@ -295,9 +295,18 @@ async def api():
     transaction = f"[{transaction_num}] {payload['command']}"
 
     queue = asyncio.Queue(loop=loop)
-    async def callback(result):
-        await queue.put(result)
-        
+
+    quote_pattern = PROCESSORS["QUOTE"][1]
+    if re.match(quote_pattern, transaction):
+        async def callback(result):
+            price = result[0]
+            stock = result[1]
+            message = "Stock {} is valued at {}".format(stock, price)
+            await queue.put(message)
+    else:
+        async def callback(result):
+            await queue.put(result)
+
     # Queue up the transaction for processing by an async worker.
     registered = await processor.register_transaction(transaction, callback)
     if not registered:
