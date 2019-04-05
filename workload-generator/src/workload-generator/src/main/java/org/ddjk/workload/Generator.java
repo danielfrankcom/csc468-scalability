@@ -87,7 +87,7 @@ public class Generator {
 
         final AsyncHttpClient client = Dsl.asyncHttpClient();
 
-        for (i = 0; i < numRequests - 1; i++) {
+        for (i = 0; i < numRequests; i++) {
 	    final String body = iterator.next();
 	    final String username = body
 		    .split(",")[1]
