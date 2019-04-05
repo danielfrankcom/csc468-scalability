@@ -606,6 +606,11 @@
             }
           }
 
+          staged_buys = document.getElementById('staged-buys');
+          for(i = staged_buys.rows.length-1; i > 0; i--){
+            staged_buys.deleteRow(i);
+          }
+
           if(response.buys.length){
              for(i = 0; i < response.buys.length; i++){
               stock_symbol = response.buys[i].stock_symbol;
@@ -619,6 +624,11 @@
               a.insertCell(3).innerHTML = amount; 
             }
           }
+
+          staged_sells = document.getElementById('staged-sells');
+          for(i = staged_sells.rows.length-1; i > 0; i--){
+            staged_sells.deleteRow(i);
+          }          
 
           if(response.sells.length){
              for(i = 0; i < response.sells.length; i++){
