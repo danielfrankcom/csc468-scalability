@@ -1,8 +1,9 @@
 import lib.commands as commands
-from lib.xml_writer import *
+from lib.publisher import Publisher
 
 from quart import Quart, request, jsonify
 import asyncpg
+import asyncio
 import asyncio
 import uvloop
 
@@ -12,6 +13,7 @@ import socket
 import time
 import os
 import re
+import json
 
 
 DB = DB_USER = DB_HOST = "postgres"
@@ -21,23 +23,41 @@ DB_PORT = 5432
 CONN_MIN = 100
 CONN_MAX = 1000
 
-PROCESSORS = [
-        (commands.quote, re.compile(r"^\[(\d+)\] QUOTE,([^ ]{10}),([A-Z]{1,3}) ?$")),
-        (commands.add, re.compile(r"^\[(\d+)\] ADD,([^ ]{10}),(\d+\.\d{2}) ?$")),
-        (commands.buy, re.compile(r"^\[(\d+)\] BUY,([^ ]{10}),([A-Z]{1,3}),(\d+\.\d{2}) ?$")),
-        (commands.commit_buy, re.compile(r"^\[(\d+)\] COMMIT_BUY,([^ ]{10}) ?$")),
-        (commands.cancel_buy, re.compile(r"^\[(\d+)\] CANCEL_BUY,([^ ]{10}) ?$")),
-        (commands.sell, re.compile(r"^\[(\d+)\] SELL,([^ ]{10}),([A-Z]{1,3}),(\d+\.\d{2}) ?$")),
-        (commands.commit_sell, re.compile(r"^\[(\d+)\] COMMIT_SELL,([^ ]{10}) ?$")),
-        (commands.cancel_sell, re.compile(r"^\[(\d+)\] CANCEL_SELL,([^ ]{10}) ?$")),
-        (commands.set_buy_amount, re.compile(r"^\[(\d+)\] SET_BUY_AMOUNT,([^ ]{10}),([A-Z]{1,3}),(\d+\.\d{2}) ?$")),
-        (commands.cancel_set_buy, re.compile(r"^\[(\d+)\] CANCEL_SET_BUY,([^ ]{10}),([A-Z]{1,3}) ?$")),
-        (commands.set_buy_trigger, re.compile(r"^\[(\d+)\] SET_BUY_TRIGGER,([^ ]{10}),([A-Z]{1,3}),(\d+\.\d{2}) ?$")),
-        (commands.set_sell_amount, re.compile(r"^\[(\d+)\] SET_SELL_AMOUNT,([^ ]{10}),([A-Z]{1,3}),(\d+\.\d{2}) ?$")),
-        (commands.cancel_set_sell, re.compile(r"^\[(\d+)\] CANCEL_SET_SELL,([^ ]{10}),([A-Z]{1,3}) ?$")),
-        (commands.set_sell_trigger, re.compile(r"^\[(\d+)\] SET_SELL_TRIGGER,([^ ]{10}),([A-Z]{1,3}),(\d+\.\d{2}) ?$"))
-]
 
+R_START = r"^"
+R_TRANS_NUM = r"^\[(\d+)\] "
+R_END = r" ?$"
+def build_regex(*args):
+    center = ",".join(args)
+    return re.compile(R_START + R_TRANS_NUM + center + R_END)
+
+R_STOCK = r"([A-Z]{1,3})"
+R_PRICE = r"(\d+\.\d{2})"
+R_USERNAME = r"([^ ]{10})"
+R_FILENAME = r"([\w\-. /]+)"
+
+PROCESSORS = {
+        "QUOTE": (commands.quote, build_regex("QUOTE", R_USERNAME, R_STOCK)),
+        "ADD": (commands.add, build_regex("ADD", R_USERNAME, R_PRICE)),
+        "BUY": (commands.buy, build_regex("BUY", R_USERNAME, R_STOCK, R_PRICE)),
+        "COMMIT_BUY": (commands.commit_buy, build_regex("COMMIT_BUY", R_USERNAME)),
+        "CANCEL_BUY": (commands.cancel_buy, build_regex("CANCEL_BUY", R_USERNAME)),
+        "SELL": (commands.sell, build_regex("SELL", R_USERNAME, R_STOCK, R_PRICE)),
+        "COMMIT_SELL": (commands.commit_sell, build_regex("COMMIT_SELL", R_USERNAME)),
+        "CANCEL_SELL": (commands.cancel_sell, build_regex("CANCEL_SELL", R_USERNAME)),
+        "SET_BUY_AMOUNT": (commands.set_buy_amount, build_regex("SET_BUY_AMOUNT", R_USERNAME, R_STOCK, R_PRICE)),
+        "CANCEL_SET_BUY": (commands.cancel_set_buy, build_regex("CANCEL_SET_BUY", R_USERNAME, R_STOCK)),
+        "SET_BUY_TRIGGER": (commands.set_buy_trigger, build_regex("SET_BUY_TRIGGER", R_USERNAME, R_STOCK, R_PRICE)),
+        "SET_SELL_AMOUNT": (commands.set_sell_amount, build_regex("SET_SELL_AMOUNT", R_USERNAME, R_STOCK, R_PRICE)),
+        "CANCEL_SET_SELL": (commands.cancel_set_sell, build_regex("CANCEL_SET_SELL", R_USERNAME, R_STOCK)),
+        "SET_SELL_TRIGGER": (commands.set_sell_trigger, build_regex("SET_SELL_TRIGGER", R_USERNAME, R_STOCK, R_PRICE)),
+        "DUMPLOG": (commands.dumplog_user, build_regex("DUMPLOG", R_USERNAME, R_FILENAME)),
+        "DISPLAY_SUMMARY": (commands.display_summary, build_regex("DISPLAY_SUMMARY", R_USERNAME))
+}
+
+DUMPLOG_PATTERN = build_regex("DUMPLOG", R_FILENAME)
+
+COMMAND_TYPE_PATTERN = re.compile(r"^\[\d+\] ([A-Z_]+)")
 ERROR_PATTERN = re.compile(r"^\[(\d+)\] ([A-Z_]+),([^ ,]+)")
 
 class Processor:
@@ -51,9 +71,7 @@ class Processor:
 
         self.users = dict()
 
-        # todo: The XML logger should really be moved to a
-        # database to facilitate DUMPLOGs properly.
-        self.xml_tree = LogBuilder("/out/testLOG")
+        self.publisher = Publisher()
 
         # It is possible that the postgres container has started
         # but is not ready for connections. We poll until it is
@@ -86,30 +104,96 @@ class Processor:
 
         loop = asyncio.get_event_loop()
         loop.create_task(commands.reservation_timeout_handler(loop, self.pool))
-        loop.create_task(commands.trigger_maintainer(self.pool, self.xml_tree))
+        loop.create_task(commands.trigger_maintainer(self.pool, self.publisher))
 
-    def _check_transaction(self, transaction):
-        for function, pattern in PROCESSORS:
-            match = re.match(pattern, transaction)
+    def _log_error(self, transaction):
+
+        try:
+            match = re.match(ERROR_PATTERN, transaction)
             if not match:
-                logger.debug("Pattern %s for transaction %s not matched, checking next.", pattern, transaction)
-                continue
+                # Incapable of finding even the most basic info
+                # in the transaction, so throw it away.
+                logger.error("Unable to find enough info to log %s.", transaction)
+                return
 
-            groups = match.groups()
-            logger.info("Pattern %s matched %s.", pattern, groups)
-            return (function, groups)
+            transaction_num, command, user_id = match.groups()
+            transaction_num = int(transaction_num)
+            logger.debug("Error information for %s: %s, %s, %s.",
+                    transaction, transaction_num, command, user_id)
+
+            data = {
+                "timestamp": int(time.time() * 1000),
+                "server": "DDJK",
+                "transaction_num": transaction_num,
+                "username": user_id,
+                "command": command,
+                "error_message": "Error while processing command"
+            }
+            message = {
+                "type":"errorEvent",
+                "data": data
+            }
+            self.publisher.publish_message(json.dumps(message))
+        except:
+            logger.exception("Error logging failed for %s.", transaction)
+
+    async def _handle_dumplog(self, transaction, *args):
+        settings = {
+                "publisher": self.publisher
+        }
+
+        try:
+            await commands.dumplog(*args, **settings)
+            logger.info("Work item completed for transaction %s.", transaction)
+        except:
+            logger.exception("Work item failed for transaction %s.", transaction)
+            self._log_error(transaction)
 
     async def register_transaction(self, transaction):
-        result = self._check_transaction(transaction)
-        if not result:
+
+        type_match = re.match(COMMAND_TYPE_PATTERN, transaction)
+        command_type = type_match.groups()[0]
+        logger.debug("Command type %s found.", command_type)
+
+        if not command_type or command_type not in PROCESSORS:
             self._log_error(transaction)
             logger.error("Transaction %s did not match any pattern.", transaction)
             return False
 
-        function, groups = result
+        logger.info("Transaction %s found to be type %s.", transaction, command_type)
 
-        # Note that we are not expecting the DUMPLOG command at the moment,
-        # as it contains no username.
+        processor, validity_pattern = PROCESSORS[command_type]
+        match = re.match(validity_pattern, transaction)
+
+        if not match:
+            # There is a special case that we must account for, in that there is a derivation
+            # of DUMPLOG that does not contain a username, and applies to all users. If we
+            # see 'DUMPLOG', we may fail to match on it, as it may not have a username. Here
+            # we check for this special case explicitly.
+
+            dumplog_match = re.match(DUMPLOG_PATTERN, transaction)
+            if not dumplog_match:
+                self._log_error(transaction)
+                logger.debug("Pattern for transaction %s is invalid, discarding.", transaction)
+                return False
+
+            dumplog_groups = dumplog_match.groups()
+
+            # We cannot fall through and use the code below, as it assumes that a specific
+            # user is responsible for the command. Instead, initialize a new task to deal
+            # with this command.
+            asyncio.create_task(self._handle_dumplog(transaction, *dumplog_groups))
+
+            # Return early as we don't want a specific user to deal with this command.
+            return True
+            
+
+        # At this point, we have a valid and standard command (with a username)
+        groups = match.groups()
+        logger.info("Pattern %s matched %s.", validity_pattern, groups)
+
+        # Note that we are not expecting the DUMPLOG (with no user) command at the moment,
+        # as it should have been dealt with above and contains no username.
         username = groups[1]
         logger.debug("Username %s found for %s.", username, transaction)
 
@@ -136,41 +220,11 @@ class Processor:
         # condition rears its head.
 
         # Set up the processing function for running asynchronously.
-        work = lambda settings: function(*groups, **settings)
+        work = lambda settings: processor(*groups, **settings)
         await queue.put((work, transaction))
         logger.debug("Transaction %s added to queue.", transaction)
 
         return True
-
-    def _log_error(self, transaction):
-
-        try:
-            match = re.match(ERROR_PATTERN, transaction)
-            if not match:
-                # Incapable of finding even the most basic info
-                # in the transaction, so throw it away.
-                logger.error("Unable to find enough info to log %s.", transaction)
-                return
-
-            transaction_num, command, user_id = match.groups()
-            transaction_num = int(transaction_num)
-            logger.debug("Error information for %s: %s, %s, %s.",
-                    transaction, transaction_num, command, user_id)
-
-            error = ErrorEvent()
-            attributes = {
-                "timestamp": int(time.time() * 1000),
-                "server": "DDJK",
-                "transactionNum": transaction_num,
-                "username": user_id,
-                "command": command,
-                "errorMessage": "Error while processing command"
-            }
-            error.updateAll(**attributes)
-            self.xml_tree.append(error)
-
-        except:
-            logger.exception("Error logging failed for %s.", transaction)
 
     async def _handle_user(self, queue):
         # In theory creating a new async worker for each user
@@ -188,7 +242,7 @@ class Processor:
             async with self.pool.acquire() as conn:
                 arguments = {
                         "conn": conn,
-                        "xml_tree": self.xml_tree
+                        "publisher": self.publisher
                 }
 
                 try:
@@ -202,6 +256,7 @@ class Processor:
                 
 
 logging.basicConfig(level=logging.DEBUG)
+logging.getLogger('pika').setLevel(logging.CRITICAL)
 logger = logging.getLogger(__name__)
 
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())

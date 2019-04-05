@@ -8,6 +8,48 @@ services:
             - POSTGRES_PASSWORD=${DB_PASS}
         volumes:
             - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    rabbitmq:
+        image: rabbitmq:3-management
+        hostname: "rabbitmq"
+        restart: on-failure
+        ports: 
+            - 5672:5672
+            - 15672:15672
+        environment: 
+            - RABBITMQ_DEFAULT_USER=${RABBIT_MQ_USER}
+            - RABBITMQ_DEFAULT_PASS=${RABBIT_MQ_PASS}
+    logging-db:
+        build: logging-db
+        restart: on-failure
+        environment:
+            - POSTGRES_USER=${DB_USER}
+            - POSTGRES_PASSWORD=${DB_PASS}
+        depends_on:
+            - rabbitmq
+        volumes:
+            - ./logging-db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    logging-server:
+        build: logging-server
+        restart: on-failure
+        depends_on:
+            - logging-db
+            - rabbitmq
+        volumes:
+            - ./logging-server/out:/out:rw
+    adminer-logging:
+        image: michalhosna/adminer:4.7.0
+        depends_on:
+            - logging-db
+        restart: on-failure
+        ports:
+            - 90:8080
+        environment:
+            - ADMINER_DRIVER=pgsql
+            - ADMINER_DB=postgres
+            - ADMINER_SERVER=logging-db
+            - ADMINER_USERNAME=${DB_USER}
+            - ADMINER_PASSWORD=${DB_PASS}
+            - ADMINER_AUTOLOGIN=1
     adminer:
         image: michalhosna/adminer:4.7.0
         depends_on:
@@ -33,6 +75,7 @@ services:
         depends_on:
             - postgres
             - quote-cache
+            - rabbitmq
         restart: unless-stopped
         ports:
             - ${TRANSACTION_PORT}:5000
