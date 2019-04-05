@@ -246,8 +246,8 @@ class Processor:
 
                 try:
                     result = await work_item(arguments)
-					if callback:
-						callback(result)
+                    if callback:
+                        await callback(result)
 
                     logger.info("Work item completed for transaction %s.", transaction)
                 except:
@@ -294,17 +294,17 @@ async def api():
     username = payload["username"]
     transaction = f"[{transaction_num}] {payload['command']}"
 
-	queue = asyncio.Queue(loop=loop)
-	def callback(result):
-		await queue.put(result)
-		
+    queue = asyncio.Queue(loop=loop)
+    async def callback(result):
+        await queue.put(result)
+        
     # Queue up the transaction for processing by an async worker.
     registered = await processor.register_transaction(transaction)
-	if not registered:
-		return jsonify(success=False)
+    if not registered:
+        return jsonify(success=False)
 
-	result = await queue.get()
-	return jsonify(result)
+    result = await queue.get()
+    return jsonify(result)
 
 @app.route('/status', methods=['POST'])
 async def status():
@@ -326,31 +326,31 @@ async def status():
 
             trigger_result = await conn.fetch(get_triggers, username)
 
-			triggers = []
-			if(trigger_result):
-				for row in trigger_result:
-					triggers_row = {
-						"stock_symbol": row[1],
-						"type": row[2],
-						"trigger_amount": row[3],
-						"transaction_amount": row[4]
-					}
-					triggers.append(triggers_row)
+            triggers = []
+            if(trigger_result):
+                for row in trigger_result:
+                    triggers_row = {
+                        "stock_symbol": row[1],
+                        "type": row[2],
+                        "trigger_amount": row[3],
+                        "transaction_amount": row[4]
+                    }
+                    triggers.append(triggers_row)
 
 
-			stock_check =   "SELECT * FROM stocks " \
-							"WHERE username = $1;"
+            stock_check =   "SELECT * FROM stocks " \
+                            "WHERE username = $1;"
 
-			stock_results = await conn.fetch(stock_check, username)
+            stock_results = await conn.fetch(stock_check, username)
 
-			stocks = []
-			if(stock_results):
-				for row in stock_results:
-					stocks_row = {
-						"stock_symbol": row[1],
-						"quantity": row[2]
-					}
-					stocks.append(stocks_row)
+            stocks = []
+            if(stock_results):
+                for row in stock_results:
+                    stocks_row = {
+                        "stock_symbol": row[1],
+                        "quantity": row[2]
+                    }
+                    stocks.append(stocks_row)
 
     info = {
         "balance": balance,

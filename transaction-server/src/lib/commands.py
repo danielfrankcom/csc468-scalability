@@ -1272,7 +1272,7 @@ async def trigger_maintainer(pool, xml_tree):
 
 # Deprecated.
 async def dumplog(transaction_num, filename, **settings):
-	xml_tree = settings["xml_tree"]
+    xml_tree = settings["xml_tree"]
     command = UserCommand()
     attributes = {
         "timestamp": int(time.time() * 1000), 
@@ -1285,7 +1285,7 @@ async def dumplog(transaction_num, filename, **settings):
 
 # Deprecated.
 async def dumplog_user(transaction_num, user_id, filename, **settings):
-	xml_tree = settings["xml_tree"]
+    xml_tree = settings["xml_tree"]
     command = UserCommand()
     attributes = {
         "timestamp": int(time.time() * 1000), 
@@ -1299,7 +1299,7 @@ async def dumplog_user(transaction_num, user_id, filename, **settings):
 
 # Deprecated.
 async def display_summary(transaction_num, user_id, **settings):
-	xml_tree = settings["xml_tree"]
+    xml_tree = settings["xml_tree"]
     command = UserCommand()
     attributes = {
         "timestamp": int(time.time() * 1000), 
