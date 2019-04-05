@@ -287,6 +287,7 @@ transaction_num = 0
 async def api():
     global transaction_num
     transaction_num += 1
+    trans_copy = transaction_num
     
     body = await request.data
     logger.info("Request received with body %s.", body.decode())
@@ -310,10 +311,24 @@ async def api():
         # Queue up the transaction for processing by an async worker.
         registered = await processor.register_transaction(transaction, callback)
 
+
         async_result = await queue.get()
         if async_result:
             result_dict["quote"] = async_result
-
+            data = {
+                    "timestamp": int(time.time() * 1000), 
+                    "server": "DDJK",
+                    "transaction_num": int(trans_copy),
+                    "price": async_result[0], 
+                    "command": "QUOTE",
+                    "username": username,
+                    "stock_symbol": async_result[1]
+            }
+            message = {
+                    "type": "userCommand",
+                    "data": data
+            }
+            await processor.publisher.publish_message(json.dumps(message))
     else:
         async def callback(result):
             await queue.put(result)

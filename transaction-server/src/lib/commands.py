@@ -365,7 +365,7 @@ async def buy(transaction_num, user_id, stock_symbol, amount, **settings):
         "transaction_num": int(transaction_num),
         "action": "remove", 
         "username": user_id,
-        "funds": float(amount)
+        "funds": float(purchase_price)
     }
     message = {
         "type": "accountTransaction",
