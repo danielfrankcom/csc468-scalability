@@ -208,6 +208,7 @@ async def add(transaction_num, user_id, amount, **settings):
         "server": "DDJK",
         "transaction_num": int(transaction_num),
         "command": "ADD",
+        "username": user_id,
         "funds": float(amount)
     }
     message = {
