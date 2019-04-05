@@ -299,7 +299,7 @@ async def api():
         await queue.put(result)
         
     # Queue up the transaction for processing by an async worker.
-    registered = await processor.register_transaction(transaction)
+    registered = await processor.register_transaction(transaction, callback)
     if not registered:
         return jsonify(success=False)
 
