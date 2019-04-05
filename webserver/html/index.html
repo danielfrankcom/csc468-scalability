@@ -718,7 +718,7 @@
       $.post('/api',JSON.stringify(payload)).done(function(response){
         payload = {username};
         if(response.error){
-            alert(JSON.stringify(response.error));
+            alert(response.error);
         }
         $.post('/status',JSON.stringify(payload)).done(function(response){
           console.log(response);
