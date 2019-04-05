@@ -717,20 +717,18 @@
       }
       $.post('/api',JSON.stringify(payload)).done(function(response){
         payload = {username};
+        if(response.error){
+            alert(JSON.stringify(response.error));
+        }
         $.post('/status',JSON.stringify(payload)).done(function(response){
           console.log(response);
           document.getElementById("balance").innerHTML = convert_to_dollar_amount(JSON.stringify(response.balance));
-          if(JSON.stringify(response.errors[0])){
-            alert(JSON.stringify(response.errors[0]));
-          }
-          
           stocks = document.getElementById('stocks');
           for(i = stocks.rows.length-1; i > 0; i--){
             stocks.deleteRow(i);
           }
 
           if(response.stocks.length){
-            console.log("there are stocks and they are: ", response.stocks);
             console.log("RESPONSE IS: ", response);
              for(i = 0; i < response.stocks.length; i++){
               stock_name = response.stocks[i].stock_symbol;
