@@ -276,7 +276,6 @@ async def root():
 
     # Queue up the transaction for processing by an async worker.
     await processor.register_transaction(transaction, loop)
-    logger.info("Request stored with result %s.", result)
 
     response = jsonify(success=True)
     return response
