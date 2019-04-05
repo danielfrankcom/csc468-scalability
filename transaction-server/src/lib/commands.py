@@ -117,7 +117,7 @@ async def reservation_timeout_handler(pool):
 async def get_quote(user_id, stock_symbol):
     """Fetch a quote from the quote cache."""
 
-    request = "{symbol},{user}\r\n".format(symbol=stock_symbol.strip(), user=user_id.strip())
+    request = "{symbol},{user}\r".format(symbol=stock_symbol.strip(), user=user_id.strip())
     encoded = request.encode("ascii")
 
     result = None
