@@ -859,12 +859,6 @@ async def cancel_set_buy(transaction_num, user_id, stock_symbol, **settings):
 
         await conn.execute(triggers_delete, user_id, stock_symbol)
 
-        users_update =  "UPDATE users               " \
-                        "SET balance = balance + $1 " \
-                        "WHERE username = $2        "
-
-        await conn.execute(users_update, refund_amount, user_id)
-
     data = {
         "timestamp": int(time.time() * 1000), 
         "server": "DDJK",
