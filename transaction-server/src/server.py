@@ -101,8 +101,8 @@ class Processor:
                 # Database is still in a non-connectable state.
                 continue
 
-        loop = asyncio.get_event_loop()
-        loop.create_task(commands.reservation_timeout_handler(loop, self.pool))
+        commands.init(loop)
+        loop.create_task(commands.reservation_timeout_handler(self.pool))
         loop.create_task(commands.trigger_maintainer(self.pool, self.publisher))
 
     def _log_error(self, transaction):
