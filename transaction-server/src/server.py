@@ -374,10 +374,44 @@ async def status():
                     }
                     stocks.append(stocks_row)
 
+            reservation_check = "SELECT " \
+                                "stock_symbol, stock_quantity, price, amount " \
+                                "FROM reserved " \
+                                "WHERE username = $1" \
+                                "AND type = $2;"
+
+            buy_results = await conn.fetch(reservation_check, username, 'buy')
+
+            buys = []
+            if(buy_results):
+                for row in buy_results:
+                    buy_row = {
+                        "stock_symbol": row[0],
+                        "stock_quantity": row[1],
+                        "price": row[2],
+                        "amount": row[3]
+                    }
+                    stocks.append(buy_row)
+
+            sell_results = await conn.fetch(reservation_check, username, 'sell')
+
+            sells = []
+            if(sell_results):
+                for row in sell_results:
+                    sell_row = {
+                        "stock_symbol": row[0],
+                        "stock_quantity": row[1],
+                        "price": row[2],
+                        "amount": row[3]
+                    }
+                    stocks.append(sell_row)
+
     info = {
         "balance": balance,
         "triggers": triggers,
-        "stocks": stocks
+        "stocks": stocks,
+        "buys": buys,
+        "sells": sells
     }
     return jsonify(info)
 
