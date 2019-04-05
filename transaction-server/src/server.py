@@ -390,7 +390,7 @@ async def status():
                         "price": row[2],
                         "amount": row[3]
                     }
-                    stocks.append(buy_row)
+                    buys.append(buy_row)
 
             sell_results = await conn.fetch(reservation_check, username, 'sell')
 
@@ -403,7 +403,7 @@ async def status():
                         "price": row[2],
                         "amount": row[3]
                     }
-                    stocks.append(sell_row)
+                    sells.append(sell_row)
 
     info = {
         "balance": balance,

@@ -572,10 +572,17 @@
           }
 
           if(response.stocks.length){
-            console.log("RESPONSE IS: ", response);
              for(i = 0; i < response.stocks.length; i++){
-              stock_name = response.stocks[i].stock_symbol;
-              stock_quantity = JSON.stringify(response.stocks[i].quantity);
+              current_stock = response.stocks[i];
+
+              // User has no stocks of this type,
+              // so simply hide the row.
+              if (current_stock.quantity == 0) {
+                continue;
+              }
+
+              stock_name = current_stock.stock_symbol;
+              stock_quantity = JSON.stringify(current_stock.quantity);
               var a = document.getElementById('stocks').insertRow(-1);
               var b = a.insertCell(0); 
               b.innerHTML = stock_name;
