@@ -776,6 +776,8 @@
         payload = {username};
         if(response.error){
             alert(response.error);
+        } else if (response.quote) {
+            alert(response.quote);
         }
       })
   

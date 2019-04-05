@@ -295,28 +295,38 @@ async def api():
     transaction = f"[{transaction_num}] {payload['command']}"
 
     queue = asyncio.Queue(loop=loop)
+    result_dict = {
+        "error": None
+    }
 
     quote_pattern = PROCESSORS["QUOTE"][1]
     if re.match(quote_pattern, transaction):
         async def callback(result):
             price = result[0]
             stock = result[1]
-            message = "Stock {} is valued at {}".format(stock, price)
+            message = "Stock {} is valued at {:.2f}".format(stock, price)
             await queue.put(message)
+
+        # Queue up the transaction for processing by an async worker.
+        registered = await processor.register_transaction(transaction, callback)
+
+        async_result = await queue.get()
+        if async_result:
+            result_dict["quote"] = async_result
+
     else:
         async def callback(result):
             await queue.put(result)
 
-    # Queue up the transaction for processing by an async worker.
-    registered = await processor.register_transaction(transaction, callback)
+        # Queue up the transaction for processing by an async worker.
+        registered = await processor.register_transaction(transaction, callback)
+        async_result = await queue.get()
+        if async_result:
+            result_dict["error"] = async_result
+
     if not registered:
         return jsonify(success=False)
-
-    async_result = await queue.get()
     
-    result_dict = {
-        "error": async_result
-    }
     return jsonify(result_dict)
 
 @app.route('/status', methods=['POST'])
