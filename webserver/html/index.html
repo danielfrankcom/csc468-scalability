@@ -153,7 +153,36 @@
                 <div class="card-header py-3">
                   <h6 class="m-0 font-weight-bold text-primary">OVERVIEW</h6>
                 </div>
-                <div class="card-body">
+                <div class="card-body">  
+                    <h6 class="m-0 font-weight-bold text-primary" style="text-align: center; font-size: large" >STOCKS</h6>
+                    <hr class="sidebar-divider">  
+                    <table class="table" id="stocks">
+                      <thead>
+                        <tr>
+                          <th scope="col">STOCK SYMBOL</th>
+                          <th scope="col">STOCK QUANTITY</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                      </tbody>
+                    </table>
+            <hr class="sidebar-divider">  
+            <h6 class="m-0 font-weight-bold text-primary" style="text-align: center; font-size: large" >TRIGGERS</h6>
+            <hr class="sidebar-divider"> 
+            <table class="table" id="triggers">
+                <thead>
+                  <tr>
+                    <th scope="col">STOCK SYMBOL</th>
+                    <th scope="col">TYPE</th>
+                    <th scope="col">TRIGGER AMOUNT</th>
+                    <th scope="col">TRANSACTION AMOUNT</th>
+                  </tr>
+                </thead>
+                <tbody>
+                </tbody>
+              </table>
+
+
                 </div>
               </div>
             </div>
@@ -171,7 +200,7 @@
                 </div>
               <!-- Card Body -->
                 <div class="card-body">
-                  <form>
+                  <!-- <form> -->
                     <div class="form-group">
                       <label for="buy-stock">Stock Symbol</label>
                       <input type="stock-name" class="form-control" id="buy-stock" placeholder="Stock Name">
@@ -180,8 +209,8 @@
                       <label for="buy-dollar-amount">Dollar Amount</label>
                       <input type="stock-quantity" class="form-control" id="buy-dollar-amount" placeholder="Dollar Amount">
                     </div>
-                    <button type="submit" onclick="buy()" class="btn btn-primary">Submit</button>
-                  </form>
+                    <button onclick="buy()" class="btn btn-primary">Submit</button>
+                  <!-- </form> -->
                 </div> 
               </div>
               <!-- COMMIT/CANCEL BUY -->
@@ -190,13 +219,13 @@
                   <h6 class="m-0 font-weight-bold text-primary">COMMIT/CANCEL</h6>
                 </div>
                 <!-- Card Body -->
-                <div class="card-body">
-                  <form class="text-center">
-                      <button type="submit" onclick="commit_buy()" class="btn btn-primary">Commit Buy</button>
+                <div class="card-body text-center">
+                  <!-- <form class="text-center"> -->
+                      <button onclick="commit_buy()" class="btn btn-primary">Commit Buy</button>
                       or
-                      <button type="submit" onclick="cancel_buy()" class="btn btn-primary">Cancel Buy</button>
+                      <button onclick="cancel_buy()" class="btn btn-primary">Cancel Buy</button>
 
-                  </form>
+                  <!-- </form> -->
                 </div>
               </div>
             </div>
@@ -210,7 +239,7 @@
                 </div>
                 <!-- Card Body -->
                 <div class="card-body">
-                  <form>
+                  <!-- <form> -->
                       <div class="form-group">
                           <label for="sell-stock">Stock Symbol</label>
                           <input type="stock-name" class="form-control" id="sell-stock" placeholder="Stock Symbol">
@@ -219,8 +248,8 @@
                           <label for="sell-dollar-amount">Dollar Amount</label>
                           <input type="stock-quantity" class="form-control" id="sell-dollar-amount" placeholder="Dollar Amount">
                       </div>
-                      <button type="submit" onclick="sell()" class="btn btn-primary">Submit</button>
-                  </form>
+                      <button onclick="sell()" class="btn btn-primary">Submit</button>
+                  <!-- </form> -->
                 </div>
               </div>
               <!-- COMMIT/CANCEL SELL -->
@@ -229,12 +258,12 @@
                     <h6 class="m-0 font-weight-bold text-primary">COMMIT/CANCEL</h6>
                   </div>
                   <!-- Card Body -->
-                  <div class="card-body">
-                    <form class="text-center">
-                        <button type="submit" onclick="commit_sell()" class="btn btn-primary">Commit Sell</button>
+                  <div class="card-body text-center">
+                    <!-- <form class="text-center"> -->
+                        <button onclick="commit_sell()" class="btn btn-primary">Commit Sell</button>
                         or
-                        <button type="submit" onclick="cancel_sell()" class="btn btn-primary">Cancel Sell</button>
-                    </form>
+                        <button onclick="cancel_sell()" class="btn btn-primary">Cancel Sell</button>
+                    <!-- </form> -->
                   </div>
                 </div>
             </div>
@@ -248,13 +277,13 @@
                 </div>
                 <!-- Card Body -->
                 <div class="card-body">
-                    <form>
+                    <!-- <form> -->
                         <div class="form-group">
                             <label for="quote-stock">Stock Symbol</label>
                             <input type="stock-name" class="form-control" id="quote-stock" placeholder="Stock Symbol">
                         </div>
-                        <button type="submit" onclick="quote()" class="btn btn-primary">Submit</button>
-                    </form>
+                        <button onclick="quote()" class="btn btn-primary">Submit</button>
+                    <!-- </form> -->
                 </div>
               </div>
               <!-- ADD -->
@@ -264,13 +293,13 @@
                 </div>
                 <!-- Card Body -->
                 <div class="card-body">
-                    <form>
+                    <!-- <form> -->
                         <div class="form-group">
                             <label for="add-dollar-amount">Dollar Amount</label>
                             <input type="stock-name" class="form-control" id=add-dollar-amount placeholder="Dollar Amount">
                         </div>
-                        <button type="submit" onclick="add()" class="btn btn-primary">Submit</button>
-                    </form>
+                        <button onclick="add()" class="btn btn-primary">Submit</button>
+                    <!-- </form> -->
                 </div>
               </div>
             </div>
@@ -296,7 +325,7 @@
                           </div>
                           <!-- Card Body -->
                           <div class="card-body">
-                            <form>
+                            <!-- <form> -->
                                 <div class="form-group">
                                     <label for="buy-trigger-stock">Stock Symbol</label>
                                     <input type="stock-name" class="form-control" id="buy-trigger-stock" placeholder="Stock Symbol">
@@ -305,8 +334,8 @@
                                     <label for="buy-trigger-dollar-amount">Dollar Amount</label>
                                     <input type="stock-quantity" class="form-control" id="buy-trigger-dollar-amount" placeholder="Dollar Amount">
                                 </div>
-                                <button type="submit" onclick="set_buy_trigger()" class="btn btn-primary">Submit</button>
-                            </form>
+                                <button onclick="set_buy_trigger()" class="btn btn-primary">Submit</button>
+                            <!-- </form> -->
                           </div>
                         </div>
                         <!-- SET BUY AMOUNT -->
@@ -316,7 +345,7 @@
                             </div>
                             <!-- Card Body -->
                             <div class="card-body">
-                                <form>
+                                <!-- <form> -->
                                     <div class="form-group">
                                         <label for="sell-trigger-stock">Stock Symbol</label>
                                         <input type="stock-name" class="form-control" id="sell-trigger-stock" placeholder="Stock Symbol">
@@ -325,8 +354,8 @@
                                         <label for="sell-trigger-dollar-amount">Dollar Amount</label>
                                         <input type="stock-quantity" class="form-control" id="sell-trigger-dollar-amount" placeholder="Dollar Amount">
                                     </div>
-                                    <button type="submit" onclick="set_sell_trigger()" class="btn btn-primary">Submit</button>
-                                </form>
+                                    <button onclick="set_sell_trigger()" class="btn btn-primary">Submit</button>
+                                <!-- </form> -->
                             </div>
                           </div>
                       </div>
@@ -339,7 +368,7 @@
                           </div>
                           <!-- Card Body -->
                           <div class="card-body">
-                            <form>
+                            <!-- <form> -->
                                 <div class="form-group">
                                     <label for="set-buy-stock-sym">Stock Symbol</label>
                                     <input type="stock-name" class="form-control" id="set-buy-stock-sym" placeholder="Stock Symbol">
@@ -348,8 +377,8 @@
                                     <label for="set-buy-dollar-amount">Dollar Amount</label>
                                     <input type="stock-quantity" class="form-control" id="set-buy-dollar-amount" placeholder="Dollar Amount">
                                 </div>
-                                <button type="submit" onclick="set_buy_amount()" class="btn btn-primary">Submit</button>
-                            </form>
+                                <button onclick="set_buy_amount()" class="btn btn-primary">Submit</button>
+                            <!-- </form> -->
                           </div>
                         </div>
                         <!-- SET SELL AMOUNT -->
@@ -359,7 +388,7 @@
                           </div>
                           <!-- Card Body -->
                           <div class="card-body">
-                            <form>
+                            <!-- <form> -->
                                 <div class="form-group">
                                     <label for="set-sell-stock-sym">Stock Symbol</label>
                                     <input type="stock-name" class="form-control" id="set-sell-stock-sym" placeholder="Stock Symbol">
@@ -368,8 +397,8 @@
                                     <label for="set-sell-dollar-amount">Dollar Amount</label>
                                     <input type="amount" class="form-control" id="set-sell-dollar-amount" placeholder="Dollar Amount">
                                 </div>
-                                <button type="submit" onclick="set_sell_amount()" class="btn btn-primary">Submit</button>
-                            </form>
+                                <button onclick="set_sell_amount()" class="btn btn-primary">Submit</button>
+                            <!-- </form> -->
                           </div>
                         </div>
                       </div>
@@ -382,13 +411,13 @@
                             </div>
                             <!-- Card Body -->
                             <div class="card-body">
-                              <form>
+                              <!-- <form> -->
                                   <div class="form-group">
                                       <label for="cancel-set-buy-stock">Stock Symbol</label>
                                       <input type="stock-name" class="form-control" id="cancel-set-buy-stock" placeholder="Stock Symbol">
                                   </div>
-                                  <button type="submit" onclick="cancel_set_buy()" class="btn btn-primary">Submit</button>
-                              </form>
+                                  <button onclick="cancel_set_buy()" class="btn btn-primary">Submit</button>
+                              <!-- </form> -->
                             </div>
                           </div>
                           <!-- CANCEL SET SELL -->
@@ -398,13 +427,13 @@
                             </div>
                             <!-- Card Body -->
                             <div class="card-body">
-                              <form>
+                              <!-- <form> -->
                                   <div class="form-group">
                                       <label for="sell-stock">Stock Symbol</label>
                                       <input type="stock-name" class="form-control" id="cancel-set-sell-stock" placeholder="Stock Symbol">
                                   </div>
-                                  <button type="submit" onclick="cancel_set_sell()" class="btn btn-primary">Submit</button>
-                              </form>
+                                  <button onclick="cancel_set_sell()" class="btn btn-primary">Submit</button>
+                              <!-- </form> -->
                             </div>
                           </div>
                           <!-- CANCEL SET SELL -->
@@ -413,9 +442,9 @@
                               <h6 class="m-0 font-weight-bold text-primary">LOG FILE</h6>
                             </div>
                             <!-- Card Body -->
-                            <div class="card-body">
-                              <form class="text-center">
-                                <button type="submit" onclick="create_user_log()" class="btn btn-primary mt-2 mb-2">Create User Log</button>
+                            <div class="card-body text-center">
+                              <!-- <form class="text-center"> -->
+                                <button onclick="create_user_log()" class="btn btn-primary mt-2 mb-2">Create User Log</button>
                             </form>
                             </div>
                           </div>
@@ -496,6 +525,8 @@
       var username = sessionStorage.getItem('username');
       var stock_name = document.getElementById("buy-stock").value;
       var dollar_amount = document.getElementById("buy-dollar-amount").value;
+      document.getElementById("buy-stock").value = "";
+      document.getElementById("buy-dollar-amount").value = "";
       var command = "";
       if(check_stock_name(stock_name) && check_dollar_amount(dollar_amount)){
         command = command.concat("BUY,", username, "," ,stock_name.toUpperCase(), "," , convert_to_dollar_amount(dollar_amount));
@@ -521,6 +552,8 @@
       var username = sessionStorage.getItem('username');
       var stock_name = document.getElementById("sell-stock").value;
       var dollar_amount = document.getElementById("sell-dollar-amount").value;
+      document.getElementById("sell-stock").value = "";
+      document.getElementById("sell-dollar-amount").value = "";
       var command = "";
       if(check_stock_name(stock_name) && check_dollar_amount(dollar_amount)){
         command = command.concat("SELL,", username, "," ,stock_name.toUpperCase(), "," ,convert_to_dollar_amount(dollar_amount));
@@ -545,6 +578,7 @@
     function quote(){
       var username = sessionStorage.getItem('username');
       var stock_name = document.getElementById("quote-stock").value;
+      document.getElementById("quote-stock").value = "";
       var command = "";
       if(check_stock_name(stock_name)){
         command = command.concat("QUOTE,", username, "," ,stock_name.toUpperCase());
@@ -555,6 +589,7 @@
     function add(){
       var username = sessionStorage.getItem('username');
       var dollar_amount = document.getElementById("add-dollar-amount").value;
+      document.getElementById("add-dollar-amount").value = "";
       var command = "";
       if(check_dollar_amount(dollar_amount)){
         command = command.concat("ADD,", username, "," , convert_to_dollar_amount(dollar_amount));
@@ -566,9 +601,11 @@
       var username = sessionStorage.getItem('username');
       var stock_name = document.getElementById("buy-trigger-stock").value;
       var dollar_amount = document.getElementById("buy-trigger-dollar-amount").value;
+      document.getElementById("buy-trigger-dollar-amount").value = "";
+      document.getElementById("buy-trigger-stock").value = "";
       var command = "";
       if(check_stock_name(stock_name) && check_dollar_amount(dollar_amount)){
-        command = command.concat("SET_BUY_TRIGGER,", username, ",", stock_name, "," , convert_to_dollar_amount(dollar_amount));
+        command = command.concat("SET_BUY_TRIGGER,", username, ",", stock_name.toUpperCase(), "," , convert_to_dollar_amount(dollar_amount));
         post_command(username, command);
       }
     }
@@ -577,9 +614,11 @@
       var username = sessionStorage.getItem('username');
       var stock_name = document.getElementById("set-buy-stock-sym").value;
       var dollar_amount = document.getElementById("set-buy-dollar-amount").value;
+      document.getElementById("set-buy-dollar-amount").value = "";
+      document.getElementById("set-buy-stock-sym").value = "";
       var command = "";
       if(check_stock_name(stock_name) && check_dollar_amount(dollar_amount)){
-        command = command.concat("SET_BUY_AMOUNT,", username, ",", stock_name, "," , convert_to_dollar_amount(dollar_amount));
+        command = command.concat("SET_BUY_AMOUNT,", username, ",", stock_name.toUpperCase(), "," , convert_to_dollar_amount(dollar_amount));
         post_command(username, command);
       }
     }
@@ -587,9 +626,10 @@
     function cancel_set_buy(){
       var username = sessionStorage.getItem('username');
       var stock_name = document.getElementById("cancel-set-buy-stock").value;
+      document.getElementById("cancel-set-buy-stock").value = "";
       var command = "";
       if(check_stock_name(stock_name)){
-        command = command.concat("CANCEL_SET_BUY,", username, ",", stock_name);
+        command = command.concat("CANCEL_SET_BUY,", username, ",", stock_name.toUpperCase());
         post_command(username, command);
       }
     }
@@ -598,9 +638,11 @@
       var username = sessionStorage.getItem('username');
       var stock_name = document.getElementById("sell-trigger-stock").value;
       var dollar_amount = document.getElementById("sell-trigger-dollar-amount").value;
+      document.getElementById("sell-trigger-stock").value = "";
+      document.getElementById("sell-trigger-dollar-amount").value = "";
       var command = "";
       if(check_stock_name(stock_name) && check_dollar_amount(dollar_amount)){
-        command = command.concat("SET_SELL_TRIGGER,", username, ",", stock_name, "," , convert_to_dollar_amount(dollar_amount));
+        command = command.concat("SET_SELL_TRIGGER,", username, ",", stock_name.toUpperCase(), "," , convert_to_dollar_amount(dollar_amount));
         post_command(username, command);
       }
     }
@@ -609,9 +651,11 @@
       var username = sessionStorage.getItem('username');
       var stock_name = document.getElementById("set-sell-stock-sym").value;
       var dollar_amount = document.getElementById("set-sell-dollar-amount").value;
+      document.getElementById("set-sell-stock-sym").value = "";
+      document.getElementById("set-sell-dollar-amount").value = "";
       var command = "";
       if(check_stock_name(stock_name) && check_dollar_amount(dollar_amount)){
-        command = command.concat("SET_SELL_AMOUNT,", username, ",", stock_name, "," , convert_to_dollar_amount(dollar_amount));
+        command = command.concat("SET_SELL_AMOUNT,", username, ",", stock_name.toUpperCase(), "," , convert_to_dollar_amount(dollar_amount));
         post_command(username, command);
       }
     }
@@ -619,9 +663,10 @@
     function cancel_set_sell(){
       var username = sessionStorage.getItem('username');
       var stock_name = document.getElementById("cancel-set-sell-stock").value;
+      document.getElementById("cancel-set-sell-stock").value = "";
       var command = "";
       if(check_stock_name(stock_name)){
-        command = command.concat("CANCEL_SET_SELL,", username, ",", stock_name);
+        command = command.concat("CANCEL_SET_SELL,", username, ",", stock_name.toUpperCase());
         post_command(username, command);
       }
     }
@@ -671,20 +716,68 @@
           "command": command
       }
       $.post('/api',JSON.stringify(payload)).done(function(response){
-        // alert($("#mypar").html(response[0]));
-          // check for errors in here and print them if there are any
+        payload = {username};
+        $.post('/status',JSON.stringify(payload)).done(function(response){
+          console.log(response);
+          document.getElementById("balance").innerHTML = convert_to_dollar_amount(JSON.stringify(response.balance));
+          if(JSON.stringify(response.errors[0])){
+            alert(JSON.stringify(response.errors[0]));
+          }
+          
+          stocks = document.getElementById('stocks');
+          for(i = stocks.rows.length-1; i > 0; i--){
+            stocks.deleteRow(i);
+          }
+
+          if(response.stocks.length){
+            console.log("there are stocks and they are: ", response.stocks);
+            console.log("RESPONSE IS: ", response);
+             for(i = 0; i < response.stocks.length; i++){
+              stock_name = response.stocks[i].stock_symbol;
+              stock_quantity = JSON.stringify(response.stocks[i].quantity);
+              var a = document.getElementById('stocks').insertRow(-1);
+              var b = a.insertCell(0); 
+              b.innerHTML = stock_name;
+              var c = a.insertCell(1); 
+              c.innerHTML = stock_quantity;
+            }
+          }
+
+          triggers = document.getElementById('triggers');
+          for(i = triggers.rows.length-1; i > 0; i--){
+            triggers.deleteRow(i);
+          }
+
+          if(response.triggers.length){
+            console.log("there are triggers and they are: ", response.triggers);
+            console.log("RESPONSE IS: ", response);
+
+             for(i = 0; i < response.triggers.length; i++){
+              stock_symbol = response.triggers[i].stock_symbol;
+              type = response.triggers[i].type;
+              trigger_amount = JSON.stringify(response.triggers[i].trigger_amount);
+              transaction_amount = JSON.stringify(response.triggers[i].transaction_amount);
+              var a = document.getElementById('triggers').insertRow(-1);
+              a.insertCell(0).innerHTML = stock_symbol; 
+              a.insertCell(1).innerHTML = type; 
+              a.insertCell(2).innerHTML = trigger_amount; 
+              a.insertCell(3).innerHTML = transaction_amount; 
+            }
+          }
+
+
+
+        })
       })
+  
     }
 
     function get_info(username){
       payload = {username}
       $.post('/status',JSON.stringify(payload)).done(function(response){
         document.getElementById("balance").innerHTML = JSON.stringify(response.balance);
-        if(response.error == []){
-        }else{
-          for (i = 0; i < response.error.length(); i++) {
-            alert("ERROR: ", response.error[i]);
-          }
+        if(JSON.stringify(response.errors[0])){
+          alert(JSON.stringify(response.errors[0]));
         }
       })
     }
