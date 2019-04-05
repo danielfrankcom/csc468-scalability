@@ -1277,7 +1277,7 @@ async def dumplog(transaction_num, filename, **settings):
     attributes = {
         "timestamp": int(time.time() * 1000), 
         "server": "DDJK",
-        "transactionNum": transaction_num,
+        "transactionNum": int(transaction_num),
         "command": "DUMPLOG"
     }
     command.updateAll(**attributes)
@@ -1290,7 +1290,7 @@ async def dumplog_user(transaction_num, user_id, filename, **settings):
     attributes = {
         "timestamp": int(time.time() * 1000), 
         "server": "DDJK",
-        "transactionNum": transaction_num,
+        "transactionNum": int(transaction_num),
         "command": "DUMPLOG",
         "username": user_id
     }
@@ -1304,7 +1304,7 @@ async def display_summary(transaction_num, user_id, **settings):
     attributes = {
         "timestamp": int(time.time() * 1000), 
         "server": "DDJK",
-        "transactionNum": transaction_num,
+        "transactionNum": int(transaction_num),
         "command": "DISPLAY_SUMMARY",
         "username": user_id
     }
