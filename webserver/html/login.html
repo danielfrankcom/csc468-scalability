@@ -75,7 +75,7 @@
     function login(){
         var username = document.getElementById("input-username").value;
         var command = "";
-        if(check_stock_name(username)){
+        if(check_username(username)){
             command = command.concat("ADD,", username, ",0.00");
             sessionStorage.getItem('username');
             sessionStorage.setItem('username', username);
@@ -89,7 +89,7 @@
         }
     }
 
-    function check_stock_name(username){
+    function check_username(username){
         var valid = /^[A-Za-z0-9_]+$/;
         if(!username.match(valid)){
             alert("Invalid Input. Please enter a valid username.");

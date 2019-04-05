@@ -528,7 +528,13 @@
         }
 
         $.post('/status',JSON.stringify(payload)).done(function(response){
-          console.log(response);
+          
+          // If the server has restarted, redirect to login
+          // page as the user will not exist.
+          if (response.balance == null) {
+            window.location.replace("login.html");
+          }
+
           document.getElementById("balance").innerHTML = convert_to_dollar_amount(JSON.stringify(response.balance));
           stocks = document.getElementById('stocks');
           for(i = stocks.rows.length-1; i > 0; i--){
