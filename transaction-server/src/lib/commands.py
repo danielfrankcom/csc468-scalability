@@ -1369,7 +1369,7 @@ async def dumplog(transaction_num, filename, **settings):
     }
     await publisher.publish_message(json.dumps(message))
 
-async def dumplog_user(transaction_num, user_id, filename, *settings):
+async def dumplog_user(transaction_num, user_id, filename, **settings):
     publisher = settings["publisher"]
     data = {
         "timestamp": int(time.time() * 1000), 

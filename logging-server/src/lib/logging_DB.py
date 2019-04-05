@@ -148,7 +148,7 @@ class logging_DB(object):
     
     def dumplog(self,filename,username=None):
         cur = self.conn.cursor()
-        usercommands = accounttransactions = None
+        usercommands = accounttransactions = []
         if username is None:
             cur.execute("""SELECT * FROM usercommands""")
             usercommands = cur.fetchall()
@@ -164,7 +164,7 @@ class logging_DB(object):
         combined = usercommands + accounttransactions
         sorted_combined = sorted(combined, key=lambda x: x[0])
         log_path = str("/out/"+filename)
-        builder = LogBuilder(log_path)
+        builder = LogBuilder()
         for row in sorted_combined:
             if len(row) == 8: # user command
                 columns = "timestamp server transactionNum command username stockSymbol filename funds".split(" ")
@@ -172,15 +172,15 @@ class logging_DB(object):
                 for idx,col in enumerate(row):
                     if col is not None:
                         event.update(columns[idx],col)
-                builder.append(event)
+                builder.store(event)
             elif len(row) == 6: # account transaction
                 columns = "timestamp server transactionNum action username funds".split(" ")
                 event = AccountTransaction()
                 for idx,col in enumerate(row):
                     if col is not None:
                         event.update(columns[idx],col)
-                builder.append(event)
-        # builder.write(filename)
+                builder.store(event)
+        builder.write(log_path)
 
             
         
