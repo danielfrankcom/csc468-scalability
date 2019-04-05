@@ -521,6 +521,57 @@
 
 </html>
 <script>
+    window.setInterval(function(){
+        var username = sessionStorage.getItem('username');
+        payload = {
+            "username": username
+        }
+
+        $.post('/status',JSON.stringify(payload)).done(function(response){
+          console.log(response);
+          document.getElementById("balance").innerHTML = convert_to_dollar_amount(JSON.stringify(response.balance));
+          stocks = document.getElementById('stocks');
+          for(i = stocks.rows.length-1; i > 0; i--){
+            stocks.deleteRow(i);
+          }
+
+          if(response.stocks.length){
+            console.log("RESPONSE IS: ", response);
+             for(i = 0; i < response.stocks.length; i++){
+              stock_name = response.stocks[i].stock_symbol;
+              stock_quantity = JSON.stringify(response.stocks[i].quantity);
+              var a = document.getElementById('stocks').insertRow(-1);
+              var b = a.insertCell(0); 
+              b.innerHTML = stock_name;
+              var c = a.insertCell(1); 
+              c.innerHTML = stock_quantity;
+            }
+          }
+
+          triggers = document.getElementById('triggers');
+          for(i = triggers.rows.length-1; i > 0; i--){
+            triggers.deleteRow(i);
+          }
+
+          if(response.triggers.length){
+            console.log("there are triggers and they are: ", response.triggers);
+            console.log("RESPONSE IS: ", response);
+
+             for(i = 0; i < response.triggers.length; i++){
+              stock_symbol = response.triggers[i].stock_symbol;
+              type = response.triggers[i].type;
+              trigger_amount = JSON.stringify(response.triggers[i].trigger_amount);
+              transaction_amount = JSON.stringify(response.triggers[i].transaction_amount);
+              var a = document.getElementById('triggers').insertRow(-1);
+              a.insertCell(0).innerHTML = stock_symbol; 
+              a.insertCell(1).innerHTML = type; 
+              a.insertCell(2).innerHTML = trigger_amount; 
+              a.insertCell(3).innerHTML = transaction_amount; 
+            }
+          }
+      })
+    }, 1000);
+
     function buy(){
       var username = sessionStorage.getItem('username');
       var stock_name = document.getElementById("buy-stock").value;
@@ -720,66 +771,9 @@
         if(response.error){
             alert(response.error);
         }
-        $.post('/status',JSON.stringify(payload)).done(function(response){
-          console.log(response);
-          document.getElementById("balance").innerHTML = convert_to_dollar_amount(JSON.stringify(response.balance));
-          stocks = document.getElementById('stocks');
-          for(i = stocks.rows.length-1; i > 0; i--){
-            stocks.deleteRow(i);
-          }
-
-          if(response.stocks.length){
-            console.log("RESPONSE IS: ", response);
-             for(i = 0; i < response.stocks.length; i++){
-              stock_name = response.stocks[i].stock_symbol;
-              stock_quantity = JSON.stringify(response.stocks[i].quantity);
-              var a = document.getElementById('stocks').insertRow(-1);
-              var b = a.insertCell(0); 
-              b.innerHTML = stock_name;
-              var c = a.insertCell(1); 
-              c.innerHTML = stock_quantity;
-            }
-          }
-
-          triggers = document.getElementById('triggers');
-          for(i = triggers.rows.length-1; i > 0; i--){
-            triggers.deleteRow(i);
-          }
-
-          if(response.triggers.length){
-            console.log("there are triggers and they are: ", response.triggers);
-            console.log("RESPONSE IS: ", response);
-
-             for(i = 0; i < response.triggers.length; i++){
-              stock_symbol = response.triggers[i].stock_symbol;
-              type = response.triggers[i].type;
-              trigger_amount = JSON.stringify(response.triggers[i].trigger_amount);
-              transaction_amount = JSON.stringify(response.triggers[i].transaction_amount);
-              var a = document.getElementById('triggers').insertRow(-1);
-              a.insertCell(0).innerHTML = stock_symbol; 
-              a.insertCell(1).innerHTML = type; 
-              a.insertCell(2).innerHTML = trigger_amount; 
-              a.insertCell(3).innerHTML = transaction_amount; 
-            }
-          }
-
-
-
-        })
       })
   
     }
-
-    function get_info(username){
-      payload = {username}
-      $.post('/status',JSON.stringify(payload)).done(function(response){
-        document.getElementById("balance").innerHTML = JSON.stringify(response.balance);
-        if(JSON.stringify(response.errors[0])){
-          alert(JSON.stringify(response.errors[0]));
-        }
-      })
-    }
-
 
     function convert_to_dollar_amount(amount){
       return parseFloat(Math.round(amount * Math.pow(10, 2)) /Math.pow(10,2)).toFixed(2);
