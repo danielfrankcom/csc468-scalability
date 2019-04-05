@@ -21,8 +21,6 @@ DB_PORT = 5432
 CONN_MIN = 100
 CONN_MAX = 1000
 
-ERRORS = set()
-
 PROCESSORS = [
         (commands.quote, re.compile(r"^\[(\d+)\] QUOTE,([^ ]{10}),([A-Z]{1,3}) ?$")),
         (commands.add, re.compile(r"^\[(\d+)\] ADD,([^ ]{10}),(\d+\.\d{2}) ?$")),
@@ -101,7 +99,7 @@ class Processor:
             logger.info("Pattern %s matched %s.", pattern, groups)
             return (function, groups)
 
-    async def register_transaction(self, transaction, loop):
+    async def register_transaction(self, transaction, loop, callback=None):
         result = self._check_transaction(transaction)
         if not result:
             self._log_error(transaction)
@@ -139,7 +137,7 @@ class Processor:
 
         # Set up the processing function for running asynchronously.
         work = lambda settings: function(*groups, **settings)
-        await queue.put((work, transaction))
+        await queue.put((work, transaction, callback))
         logger.debug("Transaction %s added to queue.", transaction)
 
         return True
@@ -184,7 +182,7 @@ class Processor:
         # dealing with, this won't be an issue.
 
         while True:
-            work_item, transaction = await queue.get()
+            work_item, transaction, callback = await queue.get()
             logger.info("Work retreived for transaction %s.", transaction)
 
             async with self.pool.acquire() as conn:
@@ -194,9 +192,10 @@ class Processor:
                 }
 
                 try:
-                    error = await work_item(arguments)
-                    if(error):
-                        ERRORS.add(error)
+                    result = await work_item(arguments)
+					if callback:
+						callback(result)
+
                     logger.info("Work item completed for transaction %s.", transaction)
                 except:
                     # We log the error (in xml) and continue to limp along, hoping the
@@ -223,7 +222,7 @@ async def root():
     logger.info("Request received with body %s.", transaction)
 
     # Queue up the transaction for processing by an async worker.
-    result = await processor.register_transaction(transaction, loop)
+    await processor.register_transaction(transaction, loop)
     logger.info("Request stored with result %s.", result)
 
     response = jsonify(success=True)
@@ -234,29 +233,25 @@ transaction_num = 0
 @app.route('/api', methods=['POST'])
 async def api():
     global transaction_num
-    transaction_num+=1
+    transaction_num += 1
     
     body = await request.data
     logger.info("Request received with body %s.", body.decode())
     payload = json.loads(body.decode())
     username = payload["username"]
     transaction = f"[{transaction_num}] {payload['command']}"
-    
 
+	queue = asyncio.Queue(loop=loop)
+	def callback(result):
+		await queue.put(result)
+		
     # Queue up the transaction for processing by an async worker.
-    result = await processor.register_transaction(transaction)
-    
-    # get stuff from database
-    newBalance = 100.00
-    newTriggers = None
-    newStocks = None
-    response = {
-        "errors": [],
-        "balance": newBalance,
-        "triggers": newTriggers,
-        "stocks": newStocks
-    }
-    return jsonify(response)
+    registered = await processor.register_transaction(transaction)
+	if not registered:
+		return jsonify(success=False)
+
+	result = await queue.get()
+	return jsonify(result)
 
 @app.route('/status', methods=['POST'])
 async def status():
@@ -265,22 +260,31 @@ async def status():
     payload = json.loads(body.decode())
     username = payload["username"]
 
-    errors = list(ERRORS)
-    ERRORS.clear()
-
     async with processor.pool.acquire() as conn:
         async with conn.transaction():
 
-            balance_check = "SELECT balance FROM users " \
+            get_balance =   "SELECT balance FROM users " \
                             "WHERE username = $1;"
 
-            balance = await conn.fetchval(balance_check, username)
+            balance = await conn.fetchval(get_balance, username)
 
-    triggers = []
-    stocks = []
+			# todo: check this
+            get_triggers =  "SELECT * FROM triggers " \
+                            "WHERE username = $1;"
+
+            triggers_row = await conn.fetchall(get_triggers, username)
+
+			# todo: not sure this conversion will work?
+			triggers = list(triggers_row)
+
+			# todo: check this
+            get_stocks =    "SELECT * FROM stocks " \
+							"WHERE username = $1;"
+
+            stocks_row = await conn.fetchall(get_stocks, username)
+			triggers = list(get_stocks)
 
     info = {
-        "errors": errors,
         "balance": balance,
         "triggers": triggers,
         "stocks": stocks
