@@ -303,8 +303,12 @@ async def api():
     if not registered:
         return jsonify(success=False)
 
-    result = await queue.get()
-    return jsonify(result)
+    async_result = await queue.get()
+    
+    result_dict = {
+        "error": async_result
+    }
+    return jsonify(result_dict)
 
 @app.route('/status', methods=['POST'])
 async def status():
@@ -336,7 +340,6 @@ async def status():
                         "transaction_amount": row[4]
                     }
                     triggers.append(triggers_row)
-
 
             stock_check =   "SELECT * FROM stocks " \
                             "WHERE username = $1;"
