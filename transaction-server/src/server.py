@@ -324,7 +324,7 @@ async def status():
             trigger_check = "SELECT * FROM triggers " \
                             "WHERE username = $1;"
 
-            trigger_result = await conn.fetch(get_triggers, username)
+            trigger_result = await conn.fetch(trigger_check, username)
 
             triggers = []
             if(trigger_result):
