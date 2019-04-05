@@ -184,7 +184,7 @@
             <hr class="sidebar-divider">  
             <h6 class="m-0 font-weight-bold text-primary" style="text-align: center; font-size: large" >STAGED BUYS</h6>
             <hr class="sidebar-divider"> 
-            <table class="table" id="triggers">
+            <table class="table" id="staged-buys">
                 <thead>
                   <tr>
                     <th scope="col">STOCK SYMBOL</th>
@@ -199,7 +199,7 @@
             <hr class="sidebar-divider">  
             <h6 class="m-0 font-weight-bold text-primary" style="text-align: center; font-size: large" >STAGED SELLS</h6>
             <hr class="sidebar-divider"> 
-            <table class="table" id="triggers">
+            <table class="table" id="staged-sells">
                 <thead>
                   <tr>
                     <th scope="col">STOCK SYMBOL</th>
@@ -605,6 +605,35 @@
               a.insertCell(3).innerHTML = transaction_amount; 
             }
           }
+
+          if(response.buys.length){
+             for(i = 0; i < response.buys.length; i++){
+              stock_symbol = response.buys[i].stock_symbol;
+              stock_quantity = JSON.stringify(response.buys[i].stock_quantity);
+              price = JSON.stringify(response.buys[i].price);
+              amount = JSON.stringify(response.buys[i].amount);
+              var a = document.getElementById('staged-buys').insertRow(-1);
+              a.insertCell(0).innerHTML = stock_symbol; 
+              a.insertCell(1).innerHTML = stock_quantity; 
+              a.insertCell(2).innerHTML = price; 
+              a.insertCell(3).innerHTML = amount; 
+            }
+          }
+
+          if(response.sells.length){
+             for(i = 0; i < response.sells.length; i++){
+              stock_symbol = response.sells[i].stock_symbol;
+              stock_quantity = JSON.stringify(response.sells[i].stock_quantity);
+              price = JSON.stringify(response.sells[i].price);
+              amount = JSON.stringify(response.sells[i].amount);
+              var a = document.getElementById('staged-sells').insertRow(-1);
+              a.insertCell(0).innerHTML = stock_symbol; 
+              a.insertCell(1).innerHTML = stock_quantity; 
+              a.insertCell(2).innerHTML = price; 
+              a.insertCell(3).innerHTML = amount; 
+            }
+          }
+
       })
     }, 1000);
 
