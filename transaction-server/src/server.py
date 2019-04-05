@@ -31,7 +31,7 @@ def build_regex(*args):
 
 R_STOCK = r"([A-Z]{1,3})"
 R_PRICE = r"(\d+\.\d{2})"
-R_USERNAME = r"([^ ]{10})"
+R_USERNAME = r"([^ ]+)"
 R_FILENAME = r"([\w\-. /]+)"
 
 PROCESSORS = {
