@@ -1,3 +1,874 @@
-<html>
-    <h1>Hello World!</h1>
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <meta name="description" content="">
+  <meta name="author" content="">
+
+  <title>Dashboard | DayTrading Inc.</title>
+
+  <!-- Custom fonts for this template-->
+  <link href="vendor/fontawesome-free/css/all.min.css" rel="stylesheet" type="text/css">
+  <link href="https://fonts.googleapis.com/css?family=Nunito:200,200i,300,300i,400,400i,600,600i,700,700i,800,800i,900,900i" rel="stylesheet">
+
+  <!-- Custom styles for this template-->
+  <link href="css/sb-admin-2.min.css" rel="stylesheet">
+
+</head>
+
+<body id="page-top">
+
+  <!-- Page Wrapper -->
+  <div id="wrapper">
+
+    <!-- Sidebar -->
+    <ul class="navbar-nav bg-gradient-primary sidebar sidebar-dark accordion" id="accordionSidebar">
+
+      <!-- Sidebar - Brand -->
+      <a class="sidebar-brand d-flex align-items-center justify-content-center text-justify" href="index.html">
+        <div class="sidebar-brand-text mx-3">DayTrading Inc.</div>
+      </a>
+
+      <!-- Divider -->
+      <hr class="sidebar-divider my-0">
+
+      <!-- Nav Item - Dashboard -->
+      <li class="nav-item active">
+        <a class="nav-link" href="index.html">
+          <i class="fas fa-fw fa-tachometer-alt"></i>
+          <span>Dashboard</span></a>
+      </li>
+
+      <!-- Divider -->
+      <hr class="sidebar-divider">
+
+      <!-- Heading -->
+      <div class="sidebar-heading">
+        Balance
+      </div>
+      <div>
+          <p class="sidebar-brand-text mx-3" style="color: #FFFFFF; font-size: x-large;" id="balance"></p>
+      </div>
+
+    </ul>
+    <!-- End of Sidebar -->
+
+    <!-- Content Wrapper -->
+    <div id="content-wrapper" class="d-flex flex-column">
+
+      <!-- Main Content -->
+      <div id="content">
+
+        <!-- Topbar -->
+        <nav class="navbar navbar-expand navbar-light bg-white topbar mb-4 static-top shadow">
+
+          <!-- Sidebar Toggle (Topbar) -->
+          <button id="sidebarToggleTop" class="btn btn-link d-md-none rounded-circle mr-3">
+            <i class="fa fa-bars"></i>
+          </button>
+
+          <!-- Topbar Search -->
+          <form class="d-none d-sm-inline-block form-inline mr-auto ml-md-3 my-2 my-md-0 mw-100 navbar-search">
+            <div class="input-group">
+              <input type="text" class="form-control bg-light border-0 small" style="height: 38px"placeholder="Search for..." aria-label="Search" aria-describedby="basic-addon2">
+              <div class="input-group-append">
+                <button class="btn btn-primary" type="button">
+                  <i class="fas fa-search fa-sm"></i>
+                </button>
+              </div>
+            </div>
+          </form>
+
+          <!-- Topbar Navbar -->
+          <ul class="navbar-nav ml-auto">
+
+            <!-- Nav Item - Search Dropdown (Visible Only XS) -->
+            <li class="nav-item dropdown no-arrow d-sm-none">
+              <a class="nav-link dropdown-toggle" href="#" id="searchDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                <i class="fas fa-search fa-fw"></i>
+              </a>
+              <!-- Dropdown - Messages -->
+              <div class="dropdown-menu dropdown-menu-right p-3 shadow animated--grow-in" aria-labelledby="searchDropdown">
+                <form class="form-inline mr-auto w-100 navbar-search">
+                  <div class="input-group">
+                    <input type="text" class="form-control bg-light border-0 small" placeholder="Search for..." aria-label="Search" aria-describedby="basic-addon2">
+                    <div class="input-group-append">
+                      <button class="btn btn-primary" type="button">
+                        <i class="fas fa-search fa-sm"></i>
+                      </button>
+                    </div>
+                  </div>
+                </form>
+              </div>
+            </li>
+
+            <!-- Nav Item - Alerts -->
+            <li class="nav-item dropdown no-arrow mx-1">
+              <a class="nav-link dropdown-toggle" href="#" id="alertsDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                <i class="fas fa-bell fa-fw"></i>
+                <!-- Counter - Alerts -->
+                <span class="badge badge-danger badge-counter">3+</span>
+              </a>
+            </li>
+
+            <!-- Nav Item - Messages -->
+            <li class="nav-item dropdown no-arrow mx-1">
+              <a class="nav-link dropdown-toggle" href="#" id="messagesDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                <i class="fas fa-envelope fa-fw"></i>
+                <!-- Counter - Messages -->
+                <span class="badge badge-danger badge-counter">7</span>
+              </a>
+            </li>
+
+            <div class="topbar-divider d-none d-sm-block"></div>
+
+            <!-- Nav Item - User Information -->
+            <li class="nav-item dropdown no-arrow">
+              <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                <img class="img-profile rounded-circle" src="https://images.unsplash.com/photo-1534951009808-766178b47a4f?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=1050&q=80">
+              </a>
+              <!-- Dropdown - User Information -->
+              <div class="dropdown-menu dropdown-menu-right shadow animated--grow-in" aria-labelledby="userDropdown">
+                <a class="dropdown-item" href="#" data-toggle="modal" data-target="#logoutModal">
+                  <i class="fas fa-sign-out-alt fa-sm fa-fw mr-2 text-gray-400"></i>
+                  Logout
+                </a>
+              </div>
+            </li>
+
+          </ul>
+
+        </nav>
+        <!-- End of Topbar -->
+
+        <!-- Begin Page Content -->
+        <div class="container-fluid">
+          <div class="col-xl-14">
+              <!-- Illustrations -->
+              <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                  <h6 class="m-0 font-weight-bold text-primary">OVERVIEW</h6>
+                </div>
+                <div class="card-body">  
+                    <h6 class="m-0 font-weight-bold text-primary" style="text-align: center; font-size: large" >STOCKS</h6>
+                    <hr class="sidebar-divider">  
+                    <table class="table" id="stocks">
+                      <thead>
+                        <tr>
+                          <th scope="col">STOCK SYMBOL</th>
+                          <th scope="col">STOCK QUANTITY</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                      </tbody>
+                    </table>
+            <hr class="sidebar-divider">  
+            <h6 class="m-0 font-weight-bold text-primary" style="text-align: center; font-size: large" >TRIGGERS</h6>
+            <hr class="sidebar-divider"> 
+            <table class="table" id="triggers">
+                <thead>
+                  <tr>
+                    <th scope="col">STOCK SYMBOL</th>
+                    <th scope="col">TYPE</th>
+                    <th scope="col">TRIGGER AMOUNT</th>
+                    <th scope="col">TRANSACTION AMOUNT</th>
+                  </tr>
+                </thead>
+                <tbody>
+                </tbody>
+              </table>
+            <hr class="sidebar-divider">  
+            <h6 class="m-0 font-weight-bold text-primary" style="text-align: center; font-size: large" >STAGED BUYS</h6>
+            <hr class="sidebar-divider"> 
+            <table class="table" id="staged-buys">
+                <thead>
+                  <tr>
+                    <th scope="col">STOCK SYMBOL</th>
+                    <th scope="col">QUANTITY</th>
+                    <th scope="col">PRICE PER STOCK</th>
+                    <th scope="col">TOTAL</th>
+                  </tr>
+                </thead>
+                <tbody>
+                </tbody>
+              </table>
+            <hr class="sidebar-divider">  
+            <h6 class="m-0 font-weight-bold text-primary" style="text-align: center; font-size: large" >STAGED SELLS</h6>
+            <hr class="sidebar-divider"> 
+            <table class="table" id="staged-sells">
+                <thead>
+                  <tr>
+                    <th scope="col">STOCK SYMBOL</th>
+                    <th scope="col">QUANTITY</th>
+                    <th scope="col">PRICE PER STOCK</th>
+                    <th scope="col">TOTAL</th>
+                  </tr>
+                </thead>
+                <tbody>
+                </tbody>
+              </table>
+
+
+                </div>
+              </div>
+            </div>
+
+
+
+          <!-- FIRST ROW -->
+          <div class="row">
+            <!-- FIRST COLUMN -->
+            <div class="col-xl-4 col-lg-4">
+              <!-- BUY -->
+              <div class="card shadow mb-4">
+                <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                  <h6 class="m-0 font-weight-bold text-primary">BUY</h6>
+                </div>
+              <!-- Card Body -->
+                <div class="card-body">
+                  <!-- <form> -->
+                    <div class="form-group">
+                      <label for="buy-stock">Stock Symbol</label>
+                      <input type="stock-name" class="form-control" id="buy-stock" placeholder="Stock Name">
+                    </div>
+                    <div class="form-group">
+                      <label for="buy-dollar-amount">Dollar Amount</label>
+                      <input type="stock-quantity" class="form-control" id="buy-dollar-amount" placeholder="Dollar Amount">
+                    </div>
+                    <button onclick="buy()" class="btn btn-primary">Submit</button>
+                  <!-- </form> -->
+                </div> 
+              </div>
+              <!-- COMMIT/CANCEL BUY -->
+              <div class="card shadow mb-4">
+                <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                  <h6 class="m-0 font-weight-bold text-primary">COMMIT/CANCEL</h6>
+                </div>
+                <!-- Card Body -->
+                <div class="card-body text-center">
+                  <!-- <form class="text-center"> -->
+                      <button onclick="commit_buy()" class="btn btn-primary">Commit Buy</button>
+                      or
+                      <button onclick="cancel_buy()" class="btn btn-primary">Cancel Buy</button>
+
+                  <!-- </form> -->
+                </div>
+              </div>
+            </div>
+
+            <!-- SECOND COLUMN -->
+            <div class="col-xl-4 col-lg-4">
+              <!-- SELL -->
+              <div class="card shadow mb-4">
+                <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                  <h6 class="m-0 font-weight-bold text-primary">SELL</h6>
+                </div>
+                <!-- Card Body -->
+                <div class="card-body">
+                  <!-- <form> -->
+                      <div class="form-group">
+                          <label for="sell-stock">Stock Symbol</label>
+                          <input type="stock-name" class="form-control" id="sell-stock" placeholder="Stock Symbol">
+                      </div>
+                      <div class="form-group">
+                          <label for="sell-dollar-amount">Dollar Amount</label>
+                          <input type="stock-quantity" class="form-control" id="sell-dollar-amount" placeholder="Dollar Amount">
+                      </div>
+                      <button onclick="sell()" class="btn btn-primary">Submit</button>
+                  <!-- </form> -->
+                </div>
+              </div>
+              <!-- COMMIT/CANCEL SELL -->
+              <div class="card shadow mb-4">
+                  <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                    <h6 class="m-0 font-weight-bold text-primary">COMMIT/CANCEL</h6>
+                  </div>
+                  <!-- Card Body -->
+                  <div class="card-body text-center">
+                    <!-- <form class="text-center"> -->
+                        <button onclick="commit_sell()" class="btn btn-primary">Commit Sell</button>
+                        or
+                        <button onclick="cancel_sell()" class="btn btn-primary">Cancel Sell</button>
+                    <!-- </form> -->
+                  </div>
+                </div>
+            </div>
+
+            <!-- THIRD COLUMN -->
+            <div class="col-xl-4 col-lg-4">
+              <!-- QUOTE -->
+              <div class="card shadow mb-4">
+                <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                  <h6 class="m-0 font-weight-bold text-primary">QUOTE</h6>
+                </div>
+                <!-- Card Body -->
+                <div class="card-body">
+                    <!-- <form> -->
+                        <div class="form-group">
+                            <label for="quote-stock">Stock Symbol</label>
+                            <input type="stock-name" class="form-control" id="quote-stock" placeholder="Stock Symbol">
+                        </div>
+                        <button onclick="quote()" class="btn btn-primary">Submit</button>
+                    <!-- </form> -->
+                </div>
+              </div>
+              <!-- ADD -->
+              <div class="card shadow mb-4">
+                <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                  <h6 class="m-0 font-weight-bold text-primary">ADD</h6>
+                </div>
+                <!-- Card Body -->
+                <div class="card-body">
+                    <!-- <form> -->
+                        <div class="form-group">
+                            <label for="add-dollar-amount">Dollar Amount</label>
+                            <input type="stock-name" class="form-control" id=add-dollar-amount placeholder="Dollar Amount">
+                        </div>
+                        <button onclick="add()" class="btn btn-primary">Submit</button>
+                    <!-- </form> -->
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- SECOND ROW -->
+          <div class="row">
+            <!-- TRIGGERS CARD -->
+            <div class="col-lg-12 mb-4">
+              <!-- Project Card Example -->
+                <div class="card shadow mb-4">
+                  <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">PREFERENCES</h6>
+                  </div>
+                  <div class="card-body">
+                    <div class="row">
+                      <!-- FIRST COLUMN -->
+                      <div class="col-xl-4 col-lg-4">
+                        <!-- SELL -->
+                        <div class="card shadow mb-4">
+                          <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                            <h6 class="m-0 font-weight-bold text-primary">SET BUY TRIGGER</h6>
+                          </div>
+                          <!-- Card Body -->
+                          <div class="card-body">
+                            <!-- <form> -->
+                                <div class="form-group">
+                                    <label for="buy-trigger-stock">Stock Symbol</label>
+                                    <input type="stock-name" class="form-control" id="buy-trigger-stock" placeholder="Stock Symbol">
+                                </div>
+                                <div class="form-group">
+                                    <label for="buy-trigger-dollar-amount">Dollar Amount</label>
+                                    <input type="stock-quantity" class="form-control" id="buy-trigger-dollar-amount" placeholder="Dollar Amount">
+                                </div>
+                                <button onclick="set_buy_trigger()" class="btn btn-primary">Submit</button>
+                            <!-- </form> -->
+                          </div>
+                        </div>
+                        <!-- SET BUY AMOUNT -->
+                        <div class="card shadow mb-4">
+                            <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                              <h6 class="m-0 font-weight-bold text-primary">SET SELL TRIGGER</h6>
+                            </div>
+                            <!-- Card Body -->
+                            <div class="card-body">
+                                <!-- <form> -->
+                                    <div class="form-group">
+                                        <label for="sell-trigger-stock">Stock Symbol</label>
+                                        <input type="stock-name" class="form-control" id="sell-trigger-stock" placeholder="Stock Symbol">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="sell-trigger-dollar-amount">Dollar Amount</label>
+                                        <input type="stock-quantity" class="form-control" id="sell-trigger-dollar-amount" placeholder="Dollar Amount">
+                                    </div>
+                                    <button onclick="set_sell_trigger()" class="btn btn-primary">Submit</button>
+                                <!-- </form> -->
+                            </div>
+                          </div>
+                      </div>
+                      <!-- SECOND COLUMN -->
+                      <div class="col-xl-4 col-lg-4">
+                        <!-- SET BUY AMOUNT -->
+                        <div class="card shadow mb-4">
+                          <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                            <h6 class="m-0 font-weight-bold text-primary">SET BUY AMOUNT</h6>
+                          </div>
+                          <!-- Card Body -->
+                          <div class="card-body">
+                            <!-- <form> -->
+                                <div class="form-group">
+                                    <label for="set-buy-stock-sym">Stock Symbol</label>
+                                    <input type="stock-name" class="form-control" id="set-buy-stock-sym" placeholder="Stock Symbol">
+                                </div>
+                                <div class="form-group">
+                                    <label for="set-buy-dollar-amount">Dollar Amount</label>
+                                    <input type="stock-quantity" class="form-control" id="set-buy-dollar-amount" placeholder="Dollar Amount">
+                                </div>
+                                <button onclick="set_buy_amount()" class="btn btn-primary">Submit</button>
+                            <!-- </form> -->
+                          </div>
+                        </div>
+                        <!-- SET SELL AMOUNT -->
+                        <div class="card shadow mb-4">
+                          <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                            <h6 class="m-0 font-weight-bold text-primary">SET SELL AMOUNT</h6>
+                          </div>
+                          <!-- Card Body -->
+                          <div class="card-body">
+                            <!-- <form> -->
+                                <div class="form-group">
+                                    <label for="set-sell-stock-sym">Stock Symbol</label>
+                                    <input type="stock-name" class="form-control" id="set-sell-stock-sym" placeholder="Stock Symbol">
+                                </div>
+                                <div class="form-group">
+                                    <label for="set-sell-dollar-amount">Dollar Amount</label>
+                                    <input type="amount" class="form-control" id="set-sell-dollar-amount" placeholder="Dollar Amount">
+                                </div>
+                                <button onclick="set_sell_amount()" class="btn btn-primary">Submit</button>
+                            <!-- </form> -->
+                          </div>
+                        </div>
+                      </div>
+                      <!-- THIRD COLUMN -->
+                      <div class="col-xl-4 col-lg-4">
+                          <!-- CANCEL SET BUY -->
+                          <div class="card shadow mb-4">
+                            <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                              <h6 class="m-0 font-weight-bold text-primary">CANCEL SET BUY</h6>
+                            </div>
+                            <!-- Card Body -->
+                            <div class="card-body">
+                              <!-- <form> -->
+                                  <div class="form-group">
+                                      <label for="cancel-set-buy-stock">Stock Symbol</label>
+                                      <input type="stock-name" class="form-control" id="cancel-set-buy-stock" placeholder="Stock Symbol">
+                                  </div>
+                                  <button onclick="cancel_set_buy()" class="btn btn-primary">Submit</button>
+                              <!-- </form> -->
+                            </div>
+                          </div>
+                          <!-- CANCEL SET SELL -->
+                          <div class="card shadow mb-4">
+                            <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                              <h6 class="m-0 font-weight-bold text-primary">CANCEL SET SELL</h6>
+                            </div>
+                            <!-- Card Body -->
+                            <div class="card-body">
+                              <!-- <form> -->
+                                  <div class="form-group">
+                                      <label for="sell-stock">Stock Symbol</label>
+                                      <input type="stock-name" class="form-control" id="cancel-set-sell-stock" placeholder="Stock Symbol">
+                                  </div>
+                                  <button onclick="cancel_set_sell()" class="btn btn-primary">Submit</button>
+                              <!-- </form> -->
+                            </div>
+                          </div>
+                          <!-- CANCEL SET SELL -->
+                          <div class="card shadow mb-4">
+                            <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                              <h6 class="m-0 font-weight-bold text-primary">LOG FILE</h6>
+                            </div>
+                            <!-- Card Body -->
+                            <div class="card-body text-center">
+                              <!-- <form class="text-center"> -->
+                                <button onclick="dumplog()" class="btn btn-primary mt-2 mb-2">Create User Log</button>
+                            </form>
+                            </div>
+                          </div>
+                        </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+      </div>
+      <!-- /.container-fluid -->
+
+    </div>
+    <!-- End of Main Content -->
+
+    <!-- Footer -->
+    <footer class="sticky-footer bg-white">
+      <div class="container my-auto">
+        <div class="copyright text-center my-auto">
+          <span>Copyright &copy; DayTrading Inc. 2019</span>
+        </div>
+      </div>
+    </footer>
+    <!-- End of Footer -->
+
+  </div>
+  <!-- End of Content Wrapper -->
+
+</div>
+<!-- End of Page Wrapper -->
+
+<!-- Scroll to Top Button-->
+<a class="scroll-to-top rounded" href="#page-top">
+  <i class="fas fa-angle-up"></i>
+</a>
+
+<!-- Logout Modal-->
+<div class="modal fade" id="logoutModal" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="exampleModalLabel">Ready to Leave?</h5>
+        <button class="close" type="button" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">×</span>
+        </button>
+      </div>
+      <div class="modal-body">Select "Logout" below if you are ready to end your current session.</div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" type="button" data-dismiss="modal">Cancel</button>
+        <a class="btn btn-primary" href="login.html">Logout</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Bootstrap core JavaScript-->
+<script src="vendor/jquery/jquery.min.js"></script>
+<script src="vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+
+<!-- Core plugin JavaScript-->
+<script src="vendor/jquery-easing/jquery.easing.min.js"></script>
+
+<!-- Custom scripts for all pages-->
+<script src="js/sb-admin-2.min.js"></script>
+
+<!-- Page level plugins -->
+<script src="vendor/chart.js/Chart.min.js"></script>
+
+<!-- Page level custom scripts -->
+<script src="js/demo/chart-area-demo.js"></script>
+<script src="js/demo/chart-pie-demo.js"></script>
+
+</body>
+
 </html>
+<script>
+    window.setInterval(function(){
+        var username = sessionStorage.getItem('username');
+        payload = {
+            "username": username
+        }
+
+        $.post('/status',JSON.stringify(payload)).done(function(response){
+          
+          // If the server has restarted, redirect to login
+          // page as the user will not exist.
+          if (response.balance == null) {
+            window.location.replace("login.html");
+          }
+
+          document.getElementById("balance").innerHTML = convert_to_dollar_amount(JSON.stringify(response.balance));
+          stocks = document.getElementById('stocks');
+          for(i = stocks.rows.length-1; i > 0; i--){
+            stocks.deleteRow(i);
+          }
+
+          if(response.stocks.length){
+             for(i = 0; i < response.stocks.length; i++){
+              current_stock = response.stocks[i];
+
+              // User has no stocks of this type,
+              // so simply hide the row.
+              if (current_stock.quantity == 0) {
+                continue;
+              }
+
+              stock_name = current_stock.stock_symbol;
+              stock_quantity = JSON.stringify(current_stock.quantity);
+              var a = document.getElementById('stocks').insertRow(-1);
+              var b = a.insertCell(0); 
+              b.innerHTML = stock_name;
+              var c = a.insertCell(1); 
+              c.innerHTML = stock_quantity;
+            }
+          }
+
+          triggers = document.getElementById('triggers');
+          for(i = triggers.rows.length-1; i > 0; i--){
+            triggers.deleteRow(i);
+          }
+
+          if(response.triggers.length){
+            console.log("there are triggers and they are: ", response.triggers);
+            console.log("RESPONSE IS: ", response);
+
+             for(i = 0; i < response.triggers.length; i++){
+              stock_symbol = response.triggers[i].stock_symbol;
+              type = response.triggers[i].type;
+              trigger_amount = JSON.stringify(response.triggers[i].trigger_amount);
+              transaction_amount = JSON.stringify(response.triggers[i].transaction_amount);
+              var a = document.getElementById('triggers').insertRow(-1);
+              a.insertCell(0).innerHTML = stock_symbol; 
+              a.insertCell(1).innerHTML = type; 
+              a.insertCell(2).innerHTML = trigger_amount; 
+              a.insertCell(3).innerHTML = transaction_amount; 
+            }
+          }
+
+          staged_buys = document.getElementById('staged-buys');
+          for(i = staged_buys.rows.length-1; i > 0; i--){
+            staged_buys.deleteRow(i);
+          }
+
+          if(response.buys.length){
+             for(i = 0; i < response.buys.length; i++){
+              stock_symbol = response.buys[i].stock_symbol;
+              stock_quantity = JSON.stringify(response.buys[i].stock_quantity);
+              price = JSON.stringify(response.buys[i].price);
+              amount = JSON.stringify(response.buys[i].amount);
+              var a = document.getElementById('staged-buys').insertRow(-1);
+              a.insertCell(0).innerHTML = stock_symbol; 
+              a.insertCell(1).innerHTML = stock_quantity; 
+              a.insertCell(2).innerHTML = price; 
+              a.insertCell(3).innerHTML = convert_to_dollar_amount(amount); 
+            }
+          }
+
+          staged_sells = document.getElementById('staged-sells');
+          for(i = staged_sells.rows.length-1; i > 0; i--){
+            staged_sells.deleteRow(i);
+          }          
+
+          if(response.sells.length){
+             for(i = 0; i < response.sells.length; i++){
+              stock_symbol = response.sells[i].stock_symbol;
+              stock_quantity = JSON.stringify(response.sells[i].stock_quantity);
+              price = JSON.stringify(response.sells[i].price);
+              amount = JSON.stringify(response.sells[i].amount);
+              var a = document.getElementById('staged-sells').insertRow(-1);
+              a.insertCell(0).innerHTML = stock_symbol; 
+              a.insertCell(1).innerHTML = stock_quantity; 
+              a.insertCell(2).innerHTML = price; 
+              a.insertCell(3).innerHTML = convert_to_dollar_amount(amount); 
+            }
+          }
+
+      })
+    }, 1000);
+
+    function buy(){
+      var username = sessionStorage.getItem('username');
+      var stock_name = document.getElementById("buy-stock").value;
+      var dollar_amount = document.getElementById("buy-dollar-amount").value;
+      document.getElementById("buy-stock").value = "";
+      document.getElementById("buy-dollar-amount").value = "";
+      var command = "";
+      if(check_stock_name(stock_name) && check_dollar_amount(dollar_amount)){
+        command = command.concat("BUY,", username, "," ,stock_name.toUpperCase(), "," , convert_to_dollar_amount(dollar_amount));
+        post_command(username, command);
+      }
+    }
+
+    function commit_buy(){
+      var username = sessionStorage.getItem('username');
+      var command = "";
+      command = command.concat("COMMIT_BUY,", username);
+      post_command(username, command);   
+    }
+
+    function cancel_buy(){
+        var username = sessionStorage.getItem('username');
+        var command = "";
+        command = command.concat("CANCEL_BUY,", username);
+        post_command(username, command);
+    }
+
+    function sell(){
+      var username = sessionStorage.getItem('username');
+      var stock_name = document.getElementById("sell-stock").value;
+      var dollar_amount = document.getElementById("sell-dollar-amount").value;
+      document.getElementById("sell-stock").value = "";
+      document.getElementById("sell-dollar-amount").value = "";
+      var command = "";
+      if(check_stock_name(stock_name) && check_dollar_amount(dollar_amount)){
+        command = command.concat("SELL,", username, "," ,stock_name.toUpperCase(), "," ,convert_to_dollar_amount(dollar_amount));
+        post_command(username, command);
+      }
+    }
+
+    function commit_sell(){
+        var username = sessionStorage.getItem('username');
+        var command = "";
+        command = command.concat("COMMIT_SELL,", username);
+        post_command(username, command);
+    }
+
+    function cancel_sell(){
+        var username = sessionStorage.getItem('username');
+        var command = "";
+        command = command.concat("CANCEL_SELL,", username);
+        post_command(username, command);   
+    }
+
+    function quote(){
+      var username = sessionStorage.getItem('username');
+      var stock_name = document.getElementById("quote-stock").value;
+      document.getElementById("quote-stock").value = "";
+      var command = "";
+      if(check_stock_name(stock_name)){
+        command = command.concat("QUOTE,", username, "," ,stock_name.toUpperCase());
+        post_command(username, command);      
+      }
+    }
+
+    function add(){
+      var username = sessionStorage.getItem('username');
+      var dollar_amount = document.getElementById("add-dollar-amount").value;
+      document.getElementById("add-dollar-amount").value = "";
+      var command = "";
+      if(check_dollar_amount(dollar_amount)){
+        command = command.concat("ADD,", username, "," , convert_to_dollar_amount(dollar_amount));
+        post_command(username, command);
+      }
+    }
+
+    function set_buy_trigger(){
+      var username = sessionStorage.getItem('username');
+      var stock_name = document.getElementById("buy-trigger-stock").value;
+      var dollar_amount = document.getElementById("buy-trigger-dollar-amount").value;
+      document.getElementById("buy-trigger-dollar-amount").value = "";
+      document.getElementById("buy-trigger-stock").value = "";
+      var command = "";
+      if(check_stock_name(stock_name) && check_dollar_amount(dollar_amount)){
+        command = command.concat("SET_BUY_TRIGGER,", username, ",", stock_name.toUpperCase(), "," , convert_to_dollar_amount(dollar_amount));
+        post_command(username, command);
+      }
+    }
+
+    function set_buy_amount(){
+      var username = sessionStorage.getItem('username');
+      var stock_name = document.getElementById("set-buy-stock-sym").value;
+      var dollar_amount = document.getElementById("set-buy-dollar-amount").value;
+      document.getElementById("set-buy-dollar-amount").value = "";
+      document.getElementById("set-buy-stock-sym").value = "";
+      var command = "";
+      if(check_stock_name(stock_name) && check_dollar_amount(dollar_amount)){
+        command = command.concat("SET_BUY_AMOUNT,", username, ",", stock_name.toUpperCase(), "," , convert_to_dollar_amount(dollar_amount));
+        post_command(username, command);
+      }
+    }
+
+    function cancel_set_buy(){
+      var username = sessionStorage.getItem('username');
+      var stock_name = document.getElementById("cancel-set-buy-stock").value;
+      document.getElementById("cancel-set-buy-stock").value = "";
+      var command = "";
+      if(check_stock_name(stock_name)){
+        command = command.concat("CANCEL_SET_BUY,", username, ",", stock_name.toUpperCase());
+        post_command(username, command);
+      }
+    }
+
+    function set_sell_trigger(){
+      var username = sessionStorage.getItem('username');
+      var stock_name = document.getElementById("sell-trigger-stock").value;
+      var dollar_amount = document.getElementById("sell-trigger-dollar-amount").value;
+      document.getElementById("sell-trigger-stock").value = "";
+      document.getElementById("sell-trigger-dollar-amount").value = "";
+      var command = "";
+      if(check_stock_name(stock_name) && check_dollar_amount(dollar_amount)){
+        command = command.concat("SET_SELL_TRIGGER,", username, ",", stock_name.toUpperCase(), "," , convert_to_dollar_amount(dollar_amount));
+        post_command(username, command);
+      }
+    }
+
+    function set_sell_amount(){
+      var username = sessionStorage.getItem('username');
+      var stock_name = document.getElementById("set-sell-stock-sym").value;
+      var dollar_amount = document.getElementById("set-sell-dollar-amount").value;
+      document.getElementById("set-sell-stock-sym").value = "";
+      document.getElementById("set-sell-dollar-amount").value = "";
+      var command = "";
+      if(check_stock_name(stock_name) && check_dollar_amount(dollar_amount)){
+        command = command.concat("SET_SELL_AMOUNT,", username, ",", stock_name.toUpperCase(), "," , convert_to_dollar_amount(dollar_amount));
+        post_command(username, command);
+      }
+    }
+
+    function cancel_set_sell(){
+      var username = sessionStorage.getItem('username');
+      var stock_name = document.getElementById("cancel-set-sell-stock").value;
+      document.getElementById("cancel-set-sell-stock").value = "";
+      var command = "";
+      if(check_stock_name(stock_name)){
+        command = command.concat("CANCEL_SET_SELL,", username, ",", stock_name.toUpperCase());
+        post_command(username, command);
+      }
+    }
+
+    function create_user_log(){
+      var username = sessionStorage.getItem('username');
+      var command = "";
+      command = command.concat("DUMPLOG,", username, ",userLOG");
+      post_command(username, command);
+    }
+
+    // Check if stock_symbol is 1-3 characters, and only contains letters.
+    function check_stock_name(stock_name){
+      var letters = /^[A-Za-z]+$/;
+      if(!stock_name.match(letters) || stock_name.length <= 0 || stock_name.length > 3){
+          alert("Invalid Input. Please enter a valid Stock Name.");
+          return false;
+      }else{
+          return true;
+      }
+    }
+
+    // Check if stock_quantity is a number
+    function check_stock_quantity(stock_quantity){
+      var integer = /^\d+$/;
+      if(isNaN(stock_quantity) || !stock_quantity.match(integer)){
+          alert("Invalid Input. Please enter a valid Stock Quantity.");
+          return false;
+      }else{
+          return true;
+      }
+    }
+
+    function check_dollar_amount(dollar_amount){
+      var number = /^\d+\.?\d{0,2}$/;
+      if(isNaN(dollar_amount) || !dollar_amount.match(number)){
+            alert("Invalid Input. Please enter a valid dollar amount.");
+            return false;
+        }else{
+            return true;
+        }
+    }
+
+    function post_command(username, command){
+      payload = {
+          "username": username,
+          "command": command
+      }
+      $.post('/api',JSON.stringify(payload)).done(function(response){
+        payload = {username};
+        if(response.error){
+            alert(response.error);
+        } else if (response.quote) {
+            alert(response.quote);
+        }
+      })
+  
+    }
+
+    function dumplog(){
+      var username = sessionStorage.getItem('username');
+      var command = "";
+      command = command.concat("DUMPLOG,", username, ",./FrontEndLog");
+      post_command(username, command);
+    }
+
+
+    function convert_to_dollar_amount(amount){
+      return parseFloat(Math.round(amount * Math.pow(10, 2)) /Math.pow(10,2)).toFixed(2);
+    }
+
+</script>

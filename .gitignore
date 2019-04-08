@@ -3,6 +3,7 @@ __pycache__
 .vscode
 *.xml
 *.class
+*.swp
 workload-generator/src/log
 
 # intellij-idea / gradle stuff

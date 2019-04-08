@@ -148,39 +148,51 @@ class logging_DB(object):
     
     def dumplog(self,filename,username=None):
         cur = self.conn.cursor()
-        usercommands = accounttransactions = None
+        usercommands = quotes = accounttransactions = []
         if username is None:
             cur.execute("""SELECT * FROM usercommands""")
             usercommands = cur.fetchall()
             cur.execute("""SELECT * FROM accounttransactions""")
             accounttransactions = cur.fetchall()
+            cur.execute("""SELECT * FROM quoteservers""")
+            quotes = cur.fetchall()
             cur.close()
         else:
             cur.execute("""SELECT * FROM usercommands WHERE username = %s """, (username,))
             usercommands = cur.fetchall()
             cur.execute("""SELECT * FROM accounttransactions WHERE username = %s""", (username,))
             accounttransactions = cur.fetchall()
+            cur.execute("""SELECT * FROM quoteservers WHERE username = %s""", (username,))
+            quotes = cur.fetchall()
             cur.close()
-        combined = usercommands + accounttransactions
+        combined = usercommands + accounttransactions + quotes
         sorted_combined = sorted(combined, key=lambda x: x[0])
         log_path = str("/out/"+filename)
-        builder = LogBuilder(log_path)
+        builder = LogBuilder()
         for row in sorted_combined:
-            if len(row) == 8: # user command
-                columns = "timestamp server transactionNum command username stockSymbol filename funds".split(" ")
-                event = UserCommand()
-                for idx,col in enumerate(row):
-                    if col is not None:
-                        event.update(columns[idx],col)
-                builder.append(event)
+            if len(row) == 8: # user command or quote
+                if isinstance(row[6],int):
+                    columns = "timestamp server transactionNum price stockSymbol username quoteServerTime cryptokey".split(" ")
+                    event = QuoteServer()
+                    for idx,col in enumerate(row):
+                        if col is not None:
+                            event.update(columns[idx],col)
+                    builder.store(event)
+                else:   
+                    columns = "timestamp server transactionNum command username stockSymbol filename funds".split(" ")
+                    event = UserCommand()
+                    for idx,col in enumerate(row):
+                        if col is not None:
+                            event.update(columns[idx],col)
+                    builder.store(event)
             elif len(row) == 6: # account transaction
                 columns = "timestamp server transactionNum action username funds".split(" ")
                 event = AccountTransaction()
                 for idx,col in enumerate(row):
                     if col is not None:
                         event.update(columns[idx],col)
-                builder.append(event)
-        # builder.write(filename)
+                builder.store(event)
+        builder.write(log_path)
 
             
         

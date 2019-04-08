@@ -7,7 +7,6 @@ import asyncio
 import asyncio
 import uvloop
 
-import traceback
 import logging
 import socket
 import time
@@ -33,7 +32,7 @@ def build_regex(*args):
 
 R_STOCK = r"([A-Z]{1,3})"
 R_PRICE = r"(\d+\.\d{2})"
-R_USERNAME = r"([^ ]{10})"
+R_USERNAME = r"([^ ]+)"
 R_FILENAME = r"([\w\-. /]+)"
 
 PROCESSORS = {
@@ -102,8 +101,8 @@ class Processor:
                 # Database is still in a non-connectable state.
                 continue
 
-        loop = asyncio.get_event_loop()
-        loop.create_task(commands.reservation_timeout_handler(loop, self.pool))
+        commands.init(loop)
+        loop.create_task(commands.reservation_timeout_handler(self.pool))
         loop.create_task(commands.trigger_maintainer(self.pool, self.publisher))
 
     def _log_error(self, transaction):
@@ -149,7 +148,7 @@ class Processor:
             logger.exception("Work item failed for transaction %s.", transaction)
             self._log_error(transaction)
 
-    async def register_transaction(self, transaction):
+    async def register_transaction(self, transaction, callback=None):
 
         type_match = re.match(COMMAND_TYPE_PATTERN, transaction)
         command_type = type_match.groups()[0]
@@ -205,9 +204,9 @@ class Processor:
             queue = self.users[username]
             logger.info("Added user %s to existing queue.", username)
         else:
-            queue = asyncio.Queue()
+            queue = asyncio.Queue(loop=loop)
             self.users[username] = queue
-            asyncio.create_task(self._handle_user(queue))
+            loop.create_task(self._handle_user(queue))
             logger.info("Created new queue (%s) for user %s.", id(queue), username)
 
         # There is an implicit race condition here that may occur if
@@ -221,7 +220,7 @@ class Processor:
 
         # Set up the processing function for running asynchronously.
         work = lambda settings: processor(*groups, **settings)
-        await queue.put((work, transaction))
+        await queue.put((work, transaction, callback))
         logger.debug("Transaction %s added to queue.", transaction)
 
         return True
@@ -236,7 +235,7 @@ class Processor:
         # dealing with, this won't be an issue.
 
         while True:
-            work_item, transaction = await queue.get()
+            work_item, transaction, callback = await queue.get()
             logger.info("Work retreived for transaction %s.", transaction)
 
             async with self.pool.acquire() as conn:
@@ -246,7 +245,10 @@ class Processor:
                 }
 
                 try:
-                    await work_item(arguments)
+                    result = await work_item(arguments)
+                    if callback:
+                        await callback(result)
+
                     logger.info("Work item completed for transaction %s.", transaction)
                 except:
                     # We log the error (in xml) and continue to limp along, hoping the
@@ -279,5 +281,155 @@ async def root():
 
     response = jsonify(success=True)
     return response
+
+transaction_num = 0
+
+@app.route('/api', methods=['POST'])
+async def api():
+    global transaction_num
+    transaction_num += 1
+    trans_copy = transaction_num
+    
+    body = await request.data
+    logger.info("Request received with body %s.", body.decode())
+    payload = json.loads(body.decode())
+    username = payload["username"]
+    transaction = f"[{transaction_num}] {payload['command']}"
+
+    queue = asyncio.Queue(loop=loop)
+    result_dict = {
+        "error": None
+    }
+
+    quote_pattern = PROCESSORS["QUOTE"][1]
+    if re.match(quote_pattern, transaction):
+        async def callback(result):
+            price = result[0]
+            stock = result[1]
+            message = "Stock {} is valued at {:.2f}".format(stock, price)
+            await queue.put(message)
+
+        # Queue up the transaction for processing by an async worker.
+        registered = await processor.register_transaction(transaction, callback)
+
+
+        async_result = await queue.get()
+        if async_result:
+            result_dict["quote"] = async_result
+            data = {
+                    "timestamp": int(time.time() * 1000), 
+                    "server": "DDJK",
+                    "transaction_num": int(trans_copy),
+                    "price": async_result[0], 
+                    "command": "QUOTE",
+                    "username": username,
+                    "stock_symbol": async_result[1]
+            }
+            message = {
+                    "type": "userCommand",
+                    "data": data
+            }
+            await processor.publisher.publish_message(json.dumps(message))
+    else:
+        async def callback(result):
+            await queue.put(result)
+
+        # Queue up the transaction for processing by an async worker.
+        registered = await processor.register_transaction(transaction, callback)
+        async_result = await queue.get()
+        if async_result:
+            result_dict["error"] = async_result
+
+    if not registered:
+        return jsonify(success=False)
+    
+    return jsonify(result_dict)
+
+@app.route('/status', methods=['POST'])
+async def status():
+
+    body = await request.data
+    payload = json.loads(body.decode())
+    username = payload["username"]
+
+    async with processor.pool.acquire() as conn:
+        async with conn.transaction():
+
+            get_balance =   "SELECT balance FROM users " \
+                            "WHERE username = $1;"
+
+            balance = await conn.fetchval(get_balance, username)
+
+            trigger_check = "SELECT * FROM triggers " \
+                            "WHERE username = $1;"
+
+            trigger_result = await conn.fetch(trigger_check, username)
+
+            triggers = []
+            if(trigger_result):
+                for row in trigger_result:
+                    triggers_row = {
+                        "stock_symbol": row[1],
+                        "type": row[2],
+                        "trigger_amount": row[3],
+                        "transaction_amount": row[4]
+                    }
+                    triggers.append(triggers_row)
+
+            stock_check =   "SELECT * FROM stocks " \
+                            "WHERE username = $1;"
+
+            stock_results = await conn.fetch(stock_check, username)
+
+            stocks = []
+            if(stock_results):
+                for row in stock_results:
+                    stocks_row = {
+                        "stock_symbol": row[1],
+                        "quantity": row[2]
+                    }
+                    stocks.append(stocks_row)
+
+            reservation_check = "SELECT " \
+                                "stock_symbol, stock_quantity, price, amount " \
+                                "FROM reserved " \
+                                "WHERE username = $1" \
+                                "AND type = $2;"
+
+            buy_results = await conn.fetch(reservation_check, username, 'buy')
+
+            buys = []
+            if(buy_results):
+                for row in buy_results:
+                    buy_row = {
+                        "stock_symbol": row[0],
+                        "stock_quantity": row[1],
+                        "price": row[2],
+                        "amount": row[3]
+                    }
+                    buys.append(buy_row)
+
+            sell_results = await conn.fetch(reservation_check, username, 'sell')
+
+            sells = []
+            if(sell_results):
+                for row in sell_results:
+                    sell_row = {
+                        "stock_symbol": row[0],
+                        "stock_quantity": row[1],
+                        "price": row[2],
+                        "amount": row[3]
+                    }
+                    sells.append(sell_row)
+
+    info = {
+        "balance": balance,
+        "triggers": triggers,
+        "stocks": stocks,
+        "buys": buys,
+        "sells": sells
+    }
+    return jsonify(info)
+
 
 app.run(host="0.0.0.0", port="5000", loop=loop)

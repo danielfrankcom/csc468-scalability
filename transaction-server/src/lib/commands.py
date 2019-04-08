@@ -1,7 +1,9 @@
 from datetime import datetime
 
+import traceback
 import asyncio
 import logging
+import socket
 import time
 import os
 import json
@@ -13,18 +15,25 @@ QUOTE_LIFESPAN = 60 # Time a quote is valid for (60 in production).
 QUOTE_CACHE_HOST = "quoteserve.seng.uvic.ca"
 QUOTE_CACHE_PORT = 4444
 QUOTE_SERVER_PRESENT = os.environ['http_proxy']
+QUOTE_LIMIT=100
 
 logger = logging.getLogger(__name__)
-loop = asyncio.get_event_loop()
+host = socket.gethostname()
 
-# This must be initialized from the entry point to ensure that
+# These must be initialized from the entry point to ensure that
 # the loop matches. It is guaranteed to run before anything
-# tries to access it, as the entry point calls this code before
+# tries to access it, as the entry point calls init() before
 # processing any transactions.
 reservation_timestamp_queue = None
+loop = None
+quote_sem = None
 
-async def reservation_timeout_handler(loop, pool):
-    """Helper function - used to cancel buy/sell orders after they timeout."""
+def init(entry_loop):
+    global quote_sem
+    quote_sem = asyncio.Semaphore(QUOTE_LIMIT, loop=entry_loop)
+
+    global loop
+    loop = entry_loop
 
     # Note that the expiry times stored in the queue do not necessarily correlate
     # with the reservation rows, due to clock drift and the passing of time
@@ -36,7 +45,10 @@ async def reservation_timeout_handler(loop, pool):
     # no reservations to process, as a buy/sell can be committed with no way to
     # remove the matching timestamp from the queue.
     global reservation_timestamp_queue
-    reservation_timestamp_queue = asyncio.Queue(loop=loop)
+    reservation_timestamp_queue = asyncio.Queue(loop=entry_loop)
+
+async def reservation_timeout_handler(pool):
+    """Helper function - used to cancel buy/sell orders after they timeout."""
 
     # Block until the first expiry time is available.
     expiry_time = await reservation_timestamp_queue.get()
@@ -54,39 +66,46 @@ async def reservation_timeout_handler(loop, pool):
 
         # Loops until all currently expired transactions have been dealt with.
         while True:
-            async with pool.acquire() as conn:
-                async with conn.transaction():
+            try:
+                async with pool.acquire() as conn:
+                    async with conn.transaction():
 
-                    delete_reserved =   "DELETE FROM reserved       " \
-                                        "WHERE timestamp < $1       " \
-                                        "RETURNING *;               " 
+                        delete_reserved =   "DELETE FROM reserved       " \
+                                            "WHERE timestamp < $1       " \
+                                            "RETURNING *;               " 
 
-                    target_timestamp = round(time.time(), 5)
-                    reservation = await conn.fetchrow(delete_reserved, target_timestamp)
+                        target_timestamp = round(time.time(), 5)
+                        reservation = await conn.fetchrow(delete_reserved, target_timestamp)
 
-                    # There are no more expired reservations
-                    if not reservation:
-                        logging.debug("No reservations found, breaking")
-                        break
+                        # There are no more expired reservations
+                        if not reservation:
+                            logging.debug("No reservations found, breaking")
+                            break
 
-                    logging.debug("Found reservation %s of type %s",
-                            reservation["reservationid"], reservation["type"])
+                        logging.debug("Found reservation %s of type %s",
+                                reservation["reservationid"], reservation["type"])
 
-                    if reservation["type"] == "buy":
+                        if reservation["type"] == "buy":
 
-                        users_update =  "UPDATE users " \
-                                        "SET balance = balance + $1 " \
-                                        "WHERE username = $2;"
-                        await conn.execute(users_update, reservation["amount"], reservation["username"])
+                            users_update =  "UPDATE users " \
+                                            "SET balance = balance + $1 " \
+                                            "WHERE username = $2;"
+                            await conn.execute(users_update, reservation["amount"], reservation["username"])
 
-                    else:
+                        else:
 
-                        stocks_update = "UPDATE stocks " \
-                                        "SET stock_quantity = stock_quantity + $1 " \
-                                        "WHERE username = $2 " \
-                                        "AND stock_symbol = $3;"
-                        await conn.execute(stocks_update, reservation["stock_quantity"],
-                                reservation["username"], reservation["stock_symbol"])
+                            stocks_update = "UPDATE stocks " \
+                                            "SET stock_quantity = stock_quantity + $1 " \
+                                            "WHERE username = $2 " \
+                                            "AND stock_symbol = $3;"
+                            await conn.execute(stocks_update, reservation["stock_quantity"],
+                                    reservation["username"], reservation["stock_symbol"])
+            except:
+                logger.exception("Buy/sell timeout task failed to commit.")
+
+                # An exception should not
+                # stop the entire task.
+                pass
 
         expired = True
         while expired:
@@ -98,24 +117,58 @@ async def reservation_timeout_handler(loop, pool):
 async def get_quote(user_id, stock_symbol):
     """Fetch a quote from the quote cache."""
 
-    request = "{symbol},{user}\n".format(symbol=stock_symbol, user=user_id)
+    request = "{symbol},{user}\r".format(symbol=stock_symbol.strip(), user=user_id.strip())
+    encoded = request.encode("ascii")
 
     result = None
-    if QUOTE_SERVER_PRESENT:
-        reader, writer = await asyncio.open_connection(QUOTE_CACHE_HOST, QUOTE_CACHE_PORT)
 
-        writer.write(request.encode())
+    while not result:
+        async with quote_sem:
+            try:
+                if QUOTE_SERVER_PRESENT:
+                    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-        raw = await reader.read(1024)
-        decoded = raw.decode()
-        result = decoded.split("\n")[0]
+                    with sock:
+                        #sock.setblocking(False)
 
-        writer.close()
+                        sock.bind((host, 0))
+                        await loop.sock_connect(sock, (QUOTE_CACHE_HOST, QUOTE_CACHE_PORT))
+                        #await loop.sock_connect(sock, (QUOTE_CACHE_HOST, QUOTE_CACHE_PORT))
 
-    else:
-        # This sleep will mock production delays
-        # await asyncio.sleep(2)
-        result = "20.00,BAD,usernamehere,1549827515,crytoKEY=123=o"
+                        #reader, writer = await asyncio.open_connection(QUOTE_CACHE_HOST, QUOTE_CACHE_PORT, sock=sock, loop=loop)
+                    #reader, writer = await asyncio.open_connection(QUOTE_CACHE_HOST, QUOTE_CACHE_PORT, local_addr=("127.0.0.1", 1245), loop=loop)
+
+                        await loop.sock_sendall(sock, encoded)
+                        raw = await loop.sock_recv(sock, 1024)
+
+
+                        #writer.write(encoded)
+
+                        #raw = await reader.read(1024)
+                        decoded = raw.decode("ascii")
+                        result = decoded.strip()
+
+                        #writer.close()
+                        #await writer.wait_closed()
+
+                        #try:
+                        sock.shutdown(socket.SHUT_RDWR)
+                        #except:
+                            # Sometimes this fails as the server has already
+                            # closed the socket. If this happens, the correct
+                            # outcome has aready been achieved, skip.
+                            #pass
+
+                else:
+                    # This sleep will mock production delays
+                    # await asyncio.sleep(2)
+                    result = "20.00,BAD,usernamehere,1549827515,crytoKEY=123=o"
+
+            except:
+                logger.exception("Quote attempt failed for %s and %s.", user_id, stock_symbol)
+
+                # Some form of error occurred, try again.
+                pass
 
     price, symbol, username, timestamp, cryptokey = result.split(",")
     return float(price), int(timestamp), cryptokey, username
@@ -246,7 +299,7 @@ async def buy(transaction_num, user_id, stock_symbol, amount, **settings):
         await publisher.publish_message(json.dumps(message))
 
         logger.info("Amount insufficient to purchase at least 1 stock for %s.", transaction_num)
-        return
+        return "Amount insufficient to purchase at least 1 stock"
 
     assert stock_quantity > 0
     purchase_price = float(stock_quantity * price)
@@ -279,7 +332,7 @@ async def buy(transaction_num, user_id, stock_symbol, amount, **settings):
             await publisher.publish_message(json.dumps(message))
 
             logger.info("Funds insufficient to purchase requested stock for %s", transaction_num)
-            return
+            return "Funds insufficient to purchase requested stock."
 
 
         balance_update =    "UPDATE users " \
@@ -312,7 +365,7 @@ async def buy(transaction_num, user_id, stock_symbol, amount, **settings):
         "transaction_num": int(transaction_num),
         "action": "remove", 
         "username": user_id,
-        "funds": float(amount)
+        "funds": float(purchase_price)
     }
     message = {
         "type": "accountTransaction",
@@ -356,7 +409,7 @@ async def commit_buy(transaction_num, user_id, **settings):
             await publisher.publish_message(json.dumps(message))
 
             logger.info("No buy to commit for %s", transaction_num)
-            return
+            return "No BUY to commit" 
 
         stocks_update = "INSERT INTO stocks (username, stock_symbol, stock_quantity) " \
                         "VALUES ($1, $2, $3) " \
@@ -408,7 +461,7 @@ async def cancel_buy(transaction_num, user_id, **settings):
             await publisher.publish_message(json.dumps(message))
 
             logger.info("No buy to cancel for %s", transaction_num)
-            return
+            return "No BUY to cancel" 
 
         update_balance =    "UPDATE users " \
                             "SET balance = balance + $1 " \
@@ -476,7 +529,7 @@ async def sell(transaction_num, user_id, stock_symbol, amount, **settings):
         await publisher.publish_message(json.dumps(message))
 
         logger.info("Amount insufficient to sell at least 1 stock for %s.", transaction_num)
-        return
+        return "Amount insufficient to sell at least 1 stock"
 
     assert sell_quantity > 0
 
@@ -506,7 +559,7 @@ async def sell(transaction_num, user_id, stock_symbol, amount, **settings):
             await publisher.publish_message(json.dumps(message))
 
             logger.info("Funds insufficient to purchase requested stock for %s", transaction_num)
-            return
+            return "Stock quantity insufficient to sell requested stock."
 
         sell_price = float(sell_quantity * price)
 
@@ -565,7 +618,7 @@ async def commit_sell(transaction_num, user_id, **settings):
             await publisher.publish_message(json.dumps(message))
 
             logger.info("No sell to commit for %s", transaction_num)
-            return
+            return "No SELL to commit" 
 
         users_update =  "UPDATE users " \
                         "SET balance = balance + $1 " \
@@ -628,7 +681,7 @@ async def cancel_sell(transaction_num, user_id, **settings):
             await publisher.publish_message(json.dumps(message))
 
             logger.info("No sell to cancel for %s", transaction_num)
-            return
+            return "No SELL to cancel" 
 
         stocks_update = "UPDATE stocks " \
                         "SET stock_quantity = stock_quantity + $1 " \
@@ -788,10 +841,16 @@ async def cancel_set_buy(transaction_num, user_id, stock_symbol, **settings):
             await publisher.publish_message(json.dumps(message))
 
             logger.info("SET_BUY does not exist, no action taken")
-            return
+            return "SET_BUY does not exist, no action taken"
 
         logger.info("SET_BUY found, cancelling")
         logger.debug("Refund amount for %s: %.02f", transaction_num, refund_amount)
+
+        users_update =  "UPDATE users               " \
+                        "SET balance = balance + $1 " \
+                        "WHERE username = $2        "
+
+        await conn.execute(users_update, refund_amount, user_id)
 
         triggers_delete =   "DELETE FROM triggers   " \
                             "WHERE username = $1    " \
@@ -799,12 +858,6 @@ async def cancel_set_buy(transaction_num, user_id, stock_symbol, **settings):
                             "AND type = 'buy';      "
 
         await conn.execute(triggers_delete, user_id, stock_symbol)
-
-        users_update =  "UPDATE users               " \
-                        "SET balance = balance + $1 " \
-                        "WHERE username = $2        "
-
-        await conn.execute(users_update, refund_amount, user_id)
 
     data = {
         "timestamp": int(time.time() * 1000), 
@@ -866,7 +919,7 @@ async def set_buy_trigger(transaction_num, user_id, stock_symbol, amount, **sett
             await publisher.publish_message(json.dumps(message))
 
             logger.info("SET_BUY does not exist, no action taken")
-            return
+            return "SET_BUY does not exist, no action taken"
 
         triggers_update =   "UPDATE triggers             " \
                             "SET                         " \
@@ -1051,7 +1104,7 @@ async def cancel_set_sell(transaction_num, user_id, stock_symbol, **settings):
             await publisher.publish_message(json.dumps(message))
 
             logger.info("SET_SELL does not exist, no action taken")
-            return
+            return "SET_SELL does not exist, no action taken"
 
         logger.info("SET_SELL found, cancelling")
 
@@ -1124,7 +1177,7 @@ async def set_sell_trigger(transaction_num, user_id, stock_symbol, requested_tri
             await publisher.publish_message(json.dumps(message))
 
             logger.info("SET_SELL does not exist, no action taken")
-            return
+            return "SET_SELL does not exist, no action taken"
 
         # This may be None if the trigger has not yet been set.
         current_trigger = existing["trigger_amount"]
@@ -1310,7 +1363,7 @@ async def dumplog(transaction_num, filename, **settings):
     }
     await publisher.publish_message(json.dumps(message))
 
-async def dumplog_user(transaction_num, user_id, filename, *settings):
+async def dumplog_user(transaction_num, user_id, filename, **settings):
     publisher = settings["publisher"]
     data = {
         "timestamp": int(time.time() * 1000), 
